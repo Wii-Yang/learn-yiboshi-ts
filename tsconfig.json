@@ -23,11 +23,6 @@
     "module": "commonjs",
     // ↓指定模块解析策略
     "moduleResolution": "node",
-    // ↓一些将模块导入重新映射到相对于 baseUrl 路径的配置
-    "paths": {
-      "@/*": ["src/*"],
-      "#/*": ["types/*"]
-    },
     // ↓允许导入扩展名为“.json”的模块
     "resolveJsonModule": true,
 
@@ -83,7 +78,7 @@
     "src/**/*.tsx",
     "src/**/*.vue",
     "types/**/*.d.ts",
-    "types/**/*.ts"
+    "types/**/*.ts",
   ],
   "exclude": ["node_modules", "dist"]
 }

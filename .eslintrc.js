@@ -247,8 +247,6 @@ module.exports = {
     'no-throw-literal': 2,
     // ↓不允许在行尾使用尾随空格
     'no-trailing-spaces': 2,
-    // ↓/* global */除非在注释中提及，否则禁止使用未声明的变量
-    'no-undef': 2,
     // ↓不允许将变量初始化为undefined
     'no-undef-init': 2,
     // ↓禁止混淆多行表达式
