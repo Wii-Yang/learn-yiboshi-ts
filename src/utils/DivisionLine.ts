@@ -1,4 +1,5 @@
 import process from 'process'
+import { getStrLength } from './index'
 
 function consoleDivisionLine(): void {
   const chart: string = '*'
@@ -11,8 +12,7 @@ function consoleDivisionLine(): void {
 
 function consoleDivisionLineByText(text: string): void {
   consoleDivisionLine()
-  const length: number = text.length
-  const blankLength: number = Math.floor((80 - length * 2) / 2)
+  const blankLength: number = Math.floor((80 - getStrLength(text)) / 2)
   for (let i = 0; i < blankLength; i++) {
     process.stdout.write(' ')
   }
