@@ -243,8 +243,6 @@ module.exports = {
     'no-sparse-arrays': 2,
     // ↓在构造函数之前禁止调用this/supersuper()
     'no-this-before-super': 2,
-    // ↓不允许将文字作为异常抛出
-    'no-throw-literal': 2,
     // ↓不允许在行尾使用尾随空格
     'no-trailing-spaces': 2,
     // ↓不允许将变量初始化为undefined
