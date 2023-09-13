@@ -19,7 +19,7 @@ export default async function startLearn(user: User): Promise<void> {
   await browser.get('http://www.yiboshi.com/usercenter/index')
   const url: string = await browser.getCurrentUrl()
   if (url === 'http://www.yiboshi.com/') {
-    // 未登录或登录失效
+    // 未登录或登录失效时登录
     await login(browser, user)
   }
   console.log(browser)

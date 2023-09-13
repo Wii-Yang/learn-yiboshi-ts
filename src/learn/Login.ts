@@ -49,6 +49,8 @@ export async function login(browser: WebDriver, user: User): Promise<void> {
     // 跳转到学习页
     await browser.get('http://www.yiboshi.com/usercenter/index')
   } catch (e) {
+    // 登录失败重新选择用户学习
+    await browser.quit()
     throw 'loginError'
   }
 }

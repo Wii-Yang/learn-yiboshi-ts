@@ -13,16 +13,22 @@ async function main(): Promise<void> {
     // 运行环境不满足时结束
     return
   }
-  // 获取需要学习的用户
-  const user: User = await managementUser()
-  try {
-    // 开始学习
-    await startLearn(user)
-  } catch (e) {
-    switch (e) {
-      case 'loginError':
-        consoleDivisionLineByText(`${user.username} 账号，密码错误！`)
-        break
+  let learnEnd: boolean = false
+  while (!learnEnd) {
+    // 获取需要学习的用户
+    const user: User = await managementUser()
+    try {
+      // 开始学习
+      await startLearn(user)
+      learnEnd = true
+    } catch (e) {
+      switch (e) {
+        case 'loginError':
+          consoleDivisionLineByText(`${user.username} 账号，密码错误！`)
+          break
+      }
+      // 学习过程中报错重新选择用户学习
+      consoleDivisionLineByText('学习过程中出错，重新开始学习！')
     }
   }
 }
