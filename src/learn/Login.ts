@@ -8,11 +8,14 @@ export async function login(browser: WebDriver, user: User): Promise<void> {
   const newLoginBox: WebElement = await browser.wait(
     until.elementLocated(By.className('new_login_box'))
   )
+
   // 获取 nlb_main
   const nlbMainList: WebElement[] = await newLoginBox.findElements(By.className('nlb_main'))
   const nlbMain: WebElement = nlbMainList[0]
+
   // 获取 nlb_input
   const nlbInputList: WebElement[] = await nlbMain.findElements(By.className('nlb_input'))
+
   // 输入用户名
   await nlbInputList[0].findElement(By.tagName('input')).sendKeys(user.username)
   // 输入密码
@@ -27,7 +30,7 @@ export async function login(browser: WebDriver, user: User): Promise<void> {
   await browser.wait(until.elementLocated(By.className('verifyMain')))
   // 等待手动完成验证
   consoleDivisionLineByText('等待手动完成验证')
-  await browser.wait(async () => {
+  await browser.wait(async _ => {
     const verifyMain = await browser.findElements(By.className('verifyMain'))
     return verifyMain.length === 0
   })

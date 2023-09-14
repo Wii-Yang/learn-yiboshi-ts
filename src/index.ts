@@ -3,7 +3,7 @@ import { initConfigFile } from './init'
 import User from './user'
 import { managementUser } from './user/Management'
 import startLearn from './learn'
-import { consoleDivisionLineByText } from './utils/DivisionLine'
+import { consoleDivisionLine, consoleDivisionLineByText } from './utils/DivisionLine'
 
 // 项目启动
 async function main(): Promise<void> {
@@ -17,6 +17,7 @@ async function main(): Promise<void> {
   while (!learnEnd) {
     // 获取需要学习的用户
     const user: User = await managementUser()
+    consoleDivisionLine()
     try {
       // 开始学习
       await startLearn(user)
