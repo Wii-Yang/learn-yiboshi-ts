@@ -4,14 +4,35 @@
   "description": "医博士学习辅助工具",
   "main": "lib/index.js",
   "scripts": {
-    "bootstrap": "pnpm install",
+    "bootstrap": "pnpm install && husky install",
     "build": "tsc",
     "commit": "czg",
     "preview": "node lib/index.js",
-    "serve": "ts-node src/index.ts"
+    "serve": "ts-node src/index.ts",
+    "lint": "lint-staged"
   },
   "author": "wii_yang",
   "license": "ISC",
+  "lint-staged": {
+    "*.{ts}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "{!(package)*.json,*.code-snippets,.!(browserslist)*rc}": [
+      "prettier --write--parser json"
+    ],
+    "package.json": [
+      "prettier --write"
+    ],
+    "*.md": [
+      "prettier --write"
+    ]
+  },
+  "config": {
+    "commitizen": {
+      "path": "node_modules/cz-git"
+    }
+  },
   "devDependencies": {
     "@commitlint/cli": "^17.7.1",
     "@commitlint/config-conventional": "^17.7.0",
@@ -23,6 +44,7 @@
     "eslint": "^8.48.0",
     "eslint-config-prettier": "^9.0.0",
     "husky": "^8.0.0",
+    "lint-staged": "^14.0.1",
     "prettier": "^3.0.3",
     "prettier-plugin-packagejson": "^2.4.5",
     "ts-node": "^10.9.1",
