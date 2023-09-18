@@ -1,7 +1,8 @@
 import { WebDriver, WebElement, By, until } from 'selenium-webdriver'
 import { consoleDivisionLineByText } from '../utils/DivisionLine'
 import User from '../user'
-import { createBrowser } from '../browser'
+import { createBrowserByUrl } from '../browser'
+import { learnCourse } from './Course'
 
 /**
  * 学习项目
@@ -35,19 +36,25 @@ export async function learnProject(project: WebElement, user: User): Promise<voi
  */
 async function openProject(url: string, user: User): Promise<void> {
   // 打开项目页
-  const browser: WebDriver = await createBrowser()
-  await browser.get('http://www.yiboshi.com/')
-  await browser.executeScript(`localStorage.setItem('www_5HGGWrXN_token', '${user.token}');`)
-  await browser.executeScript(`localStorage.setItem('FingerprintID', '${user.fingerprintID}');`)
-  await browser.get(url)
+  const browser: WebDriver = await createBrowserByUrl(url, user)
 
   // 等待列表加载
-  await browser.wait(until.elementLocated(By.className('nupmrm_content')))
+  await browser.wait(async _ => {
+    const courseList: WebElement[] = await browser.findElements(By.className('striped--near-white'))
+    return courseList.length > 1
+  })
+
+  // 等待弹窗出现
+  await browser.sleep(1000 * 2)
 
   // 判断是否有弹窗
   const dialog: WebElement = await browser.findElement(By.className('el-dialog__wrapper dialog_'))
   const style: string = await dialog.getAttribute('style')
   if (style.search('display: none;') < 0) {
+    // 等待弹窗加载完成
+    await browser.wait(
+      until.elementLocated(By.className('el-button el-button--small el-button--default'))
+    )
     // 当弹窗打开时关闭弹窗
     const dialogFooter: WebElement = await dialog.findElement(By.className('el-dialog__footer'))
     const closeButton: WebElement = await dialogFooter.findElement(
@@ -57,13 +64,15 @@ async function openProject(url: string, user: User): Promise<void> {
   }
 
   // 获取课程名称
-  const projectName: string = await browser.findElement(By.className('npdit1'))
+  const npdit1: WebElement = await browser.findElement(By.className('npdit1'))
+  const projectName: string = await npdit1.getText()
 
   // 获取课程列表
   const courseList: WebElement[] = await browser.findElements(By.className('striped--near-white'))
 
   for (let i: number = 1; i < courseList.length; i++) {
     // 学习课程
+    await learnCourse(courseList[i], user)
 
     if (i === courseList.length - 1) {
       consoleDivisionLineByText(`完成《${projectName}》项目学习`)
