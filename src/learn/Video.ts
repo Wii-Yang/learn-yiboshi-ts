@@ -21,6 +21,15 @@ export async function watchVideo(videoButton: WebElement, user: User): Promise<v
 
   await loading(browser, videoWindowHandle)
 
+  if (await completeViewing(browser)) {
+    // 当学习已达标时跳过视频学习
+    // 浏览器关闭视频页
+    await browser.close()
+    // 浏览器切换到课程页
+    await browser.switchTo().window(courseWindowHandle)
+    return
+  }
+
   // 获取视频页 url
   const videoUrl = await browser.getCurrentUrl()
 
@@ -65,27 +74,24 @@ async function openVideo(url: string, user: User): Promise<void> {
   // 等待视频加载完成
   await loading(browser)
 
-  // 判断是否需要观看视频
-  if (!(await completeViewing(browser))) {
-    // 判断是否有弹窗
+  // 播放视频
+  const plyrControl: WebElement = await browser.findElement(
+    By.className('plyr__control plyr__control--overlaid')
+  )
+  await plyrControl.click()
 
-    // 播放视频
-    const plyrControl: WebElement = await browser.findElement(
-      By.className('plyr__control plyr__control--overlaid')
-    )
-    await plyrControl.click()
+  // 等待视频播放结束
+  await browser.wait(
+    async _ => {
+      await continueLearningVideo(browser)
+      return await completeViewing(browser)
+    },
+    0,
+    undefined,
+    1000
+  )
 
-    // 等待视频播放结束
-    await browser.wait(
-      async _ => {
-        await continueLearningVideo(browser)
-        return await completeViewing(browser)
-      },
-      0,
-      undefined,
-      1000
-    )
-  }
+  // 完成视频观看关闭浏览器
   await browser.quit()
 }
 
