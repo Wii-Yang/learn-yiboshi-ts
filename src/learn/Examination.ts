@@ -79,8 +79,8 @@ async function answerChoiceQuestions(questions: WebElement[]): Promise<void> {
 
   async function answerChoiceQuestion(index: number, question: WebElement): Promise<void> {
     const browser: WebDriver = await question.driver_
-    // 获取答案列表
 
+    // 获取答案列表
     const ttmItems: WebElement = await question.findElement(By.className('ttm_items'))
     const items: WebElement[] = await ttmItems.findElements(By.className('stem'))
 
@@ -106,7 +106,32 @@ async function answerMultipleChoiceQuestions(questions: WebElement[]): Promise<v
 }
 
 async function answerJudgingQuestions(questions: WebElement[]): Promise<void> {
-  console.log(questions)
+  for (let i: number = 0; i < questions[i]; i++) {
+    await answerJudgingQuestion(i, questions[i])
+  }
+
+  async function answerJudgingQuestion(index: number, question: WebElement): Promise<void> {
+    const browser: WebDriver = await question.driver_
+
+    // 获取答案列表
+    const ttmItems: WebElement = await question.findElement(By.className('ttm_items'))
+    const items: WebElement[] = await ttmItems.findElements(By.className('stem'))
+
+    let i: number = 0
+
+    do {
+      // 浏览器滚动到答案
+      await browser.executeScript('arguments[0].scrollIntoView(false);', question)
+
+      // 获取本次选择的答案
+      const stemItem: WebElement = await items[i].findElement(By.className('stemItem'))
+
+      // 点击答案
+      await stemItem.click()
+
+      i++
+    } while (await viewResults('是非题', index, browser))
+  }
 }
 
 async function viewResults(type: string, index: number, browser: WebDriver): Promise<boolean> {
