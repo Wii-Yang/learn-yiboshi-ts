@@ -22,10 +22,10 @@ export async function learnProject(project: WebElement, user: User): Promise<voi
   const npcbStatus = await project.findElement(By.className('npcb_status'))
   const npcbStatusSpan = await npcbStatus.findElement(By.tagName('span'))
   const projectStatus = await npcbStatusSpan.getText()
-  if (projectStatus === '【未学习】') {
+  if (projectStatus === '【未学习】' || projectStatus === '【学习中】') {
     await openProject(projectUrl, user)
   } else {
-    consoleDivisionLineByText(`已完成《${projectText}》课程学习`)
+    consoleDivisionLineByText(`已完成《${projectText}》项目学习`)
   }
 }
 

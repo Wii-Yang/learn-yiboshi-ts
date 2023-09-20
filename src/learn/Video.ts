@@ -19,7 +19,7 @@ export async function watchVideo(videoButton: WebElement, user: User): Promise<v
   )
   await browser.switchTo().window(videoWindowHandle)
 
-  await loading(browser, videoWindowHandle)
+  await loading(browser)
 
   if (await completeViewing(browser)) {
     // 当学习已达标时跳过视频学习
@@ -44,20 +44,14 @@ export async function watchVideo(videoButton: WebElement, user: User): Promise<v
 /**
  * 等待视频加载完成
  */
-async function loading(browser: WebDriver, windowHandle?: string): Promise<void> {
+async function loading(browser: WebDriver): Promise<void> {
   await browser.wait(until.elementLocated(By.className('vml_main')))
 
   await browser.wait(async _ => {
-    if (windowHandle) {
-      const currentWindowHandle = await browser.getWindowHandle()
-      if (currentWindowHandle === windowHandle) return true
-    }
     const vmlMain: WebElement = await browser.findElement(By.className('vml_main'))
     const vmlmIngList: WebElement[] = await vmlMain.findElements(By.tagName('li'))
     return vmlmIngList.length > 0
   })
-
-  await browser.sleep(1000 * 2)
 
   await continueLearningVideo(browser)
 }
@@ -74,16 +68,26 @@ async function openVideo(url: string, user: User): Promise<void> {
   // 等待视频加载完成
   await loading(browser)
 
-  // 播放视频
-  const plyrControl: WebElement = await browser.findElement(
-    By.className('plyr__control plyr__control--overlaid')
-  )
-  await plyrControl.click()
+  try {
+    await playVideo()
+  } catch (e) {
+    await continueLearningVideo(browser)
+
+    // 播放视频
+    const plyrControl: WebElement = await browser.findElement(
+      By.className('plyr__control plyr__control--overlaid')
+    )
+    await plyrControl.click()
+  }
 
   // 等待视频播放结束
   await browser.wait(
     async _ => {
       await continueLearningVideo(browser)
+      const plyr: WebElement[] = await browser.findElements(By.className('plyr--paused'))
+      if (plyr.length === 1) {
+        await playVideo()
+      }
       return await completeViewing(browser)
     },
     0,
@@ -93,6 +97,14 @@ async function openVideo(url: string, user: User): Promise<void> {
 
   // 完成视频观看关闭浏览器
   await browser.quit()
+
+  // 播放视频
+  async function playVideo(): Promise<void> {
+    const plyrControl: WebElement = await browser.findElement(
+      By.className('plyr__control plyr__control--overlaid')
+    )
+    await plyrControl.click()
+  }
 }
 
 /**
@@ -130,6 +142,8 @@ async function continueLearningVideo(browser: WebDriver): Promise<void> {
         )
         const button: WebElement = await messageBoxBtns.findElement(By.tagName('button'))
         await button.click()
+
+        await browser.sleep(1000)
       }
     }
   }
