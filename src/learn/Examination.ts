@@ -101,12 +101,79 @@ async function answerChoiceQuestions(questions: WebElement[]): Promise<void> {
   }
 }
 
+const MultipleChoiceResult: number[][] = [
+  [0, 1],
+  [0, 2],
+  [0, 3],
+  [0, 4],
+  [1, 2],
+  [1, 3],
+  [1, 4],
+  [2, 3],
+  [2, 4],
+  [3, 4],
+  [0, 1, 2],
+  [0, 1, 3],
+  [0, 1, 4],
+  [0, 2, 3],
+  [0, 2, 4],
+  [0, 3, 4],
+  [1, 2, 3],
+  [1, 2, 4],
+  [1, 3, 4],
+  [2, 3, 4],
+  [0, 1, 2, 3],
+  [0, 1, 2, 4],
+  [0, 1, 3, 4],
+  [0, 2, 3, 4],
+  [1, 2, 3, 4],
+  [0, 1, 2, 3, 4]
+]
+
 async function answerMultipleChoiceQuestions(questions: WebElement[]): Promise<void> {
-  console.log(questions)
+  for (let i: number = 0; i < questions.length; i++) {
+    await MultipleChoiceQuestion(i, questions[i])
+  }
+
+  async function MultipleChoiceQuestion(index: number, question: WebElement) {
+    const browser: WebDriver = await question.driver_
+
+    // 获取答案列表
+    const ttmItems: WebElement = await question.findElement(By.className('ttm_items'))
+    const items: WebElement[] = await ttmItems.findElements(By.className('stem'))
+
+    let i: number = 0
+
+    do {
+      // 浏览器滚动到答案
+      await browser.executeScript('arguments[0].scrollIntoView(false);', question)
+
+      if (i > 0) {
+        // 取消已选中的答案
+        await clickItems(i - 1, items)
+      }
+
+      // 点击答案
+      await clickItems(i, items)
+
+      i++
+    } while (await viewResults('多选题', index, browser))
+  }
+
+  async function clickItems(index: number, items: WebElement[]): Promise<void> {
+    // 获取需要点击的答案列表
+    const result: number[] = MultipleChoiceResult[index]
+
+    // 点击答案
+    for (let i: number = 0; i < result.length; i++) {
+      const stemItem: WebElement = await items[result[i]].findElement(By.className('stemItem'))
+      await stemItem.click()
+    }
+  }
 }
 
 async function answerJudgingQuestions(questions: WebElement[]): Promise<void> {
-  for (let i: number = 0; i < questions[i]; i++) {
+  for (let i: number = 0; i < questions.length; i++) {
     await answerJudgingQuestion(i, questions[i])
   }
 
@@ -169,17 +236,16 @@ async function viewResults(type: string, index: number, browser: WebDriver): Pro
   })
 
   // 获取答案列表
-  const sbdmCells: WebElement[] = await browser.findElements(By.className('sbdm_cell'))
+  const sbdmTitles: WebElement[] = await browser.findElements(By.className('sbdm_title'))
+  const sbdmMains: WebElement[] = await browser.findElements(By.className('sbdm_main'))
 
-  for (let i: number = 0; i < sbdmCells.length; i++) {
+  for (let i: number = 0; i < sbdmTitles.length; i++) {
     // 获取答案 title
-    const sbdmTitle: WebElement = await sbdmCells[i].findElement(By.className('sbdm_title'))
-    const title: string = await sbdmTitle.getText()
+    const title: string = await sbdmTitles[i].getText()
 
     if (title.search(type) >= 0) {
       // 答案结果列表
-      const sbdmMain: WebElement = await sbdmCells[i].findElement(By.className('sbdm_main'))
-      const lis: WebElement[] = await sbdmMain.findElements(By.tagName('li'))
+      const lis: WebElement[] = await sbdmMains[i].findElements(By.tagName('li'))
 
       const use: WebElement = await lis[index].findElement(By.tagName('use'))
       const xlink: string = await use.getAttribute('xlink:href')
