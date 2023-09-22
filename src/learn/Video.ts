@@ -8,10 +8,12 @@ import { createBrowserByUrl } from '../browser'
  * @param user
  */
 export async function watchVideo(videoButton: WebElement, user: User): Promise<void> {
+  const browser: WebDriver = videoButton.driver_
+  // 浏览器滚动到视频
+  await browser.executeScript('arguments[0].scrollIntoView(false);', videoButton)
   await videoButton.click()
 
   // 浏览器切换到视频页
-  const browser: WebDriver = videoButton.driver_
   const courseWindowHandle: string = await browser.getWindowHandle()
   const allWindowHandles: string[] = await browser.getAllWindowHandles()
   const videoWindowHandle: string | undefined = allWindowHandles.find(
@@ -80,20 +82,25 @@ async function openVideo(url: string, user: User): Promise<void> {
     await plyrControl.click()
   }
 
-  // 等待视频播放结束
-  await browser.wait(
-    async _ => {
-      await continueLearningVideo(browser)
-      const plyr: WebElement[] = await browser.findElements(By.className('plyr--paused'))
-      if (plyr.length === 1) {
-        await playVideo()
-      }
-      return await completeViewing(browser)
-    },
-    0,
-    undefined,
-    1000
-  )
+  try {
+    // 等待视频播放结束
+    await browser.wait(
+      async _ => {
+        await continueLearningVideo(browser)
+        const plyr: WebElement[] = await browser.findElements(By.className('plyr--paused'))
+        if (plyr.length === 1) {
+          await playVideo()
+        }
+        return await completeViewing(browser)
+      },
+      0,
+      undefined,
+      1000
+    )
+  } catch (e) {
+    await browser.quit()
+    throw 'playVideoError'
+  }
 
   // 完成视频观看关闭浏览器
   await browser.quit()

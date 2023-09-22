@@ -13,11 +13,14 @@ async function main(): Promise<void> {
     // 运行环境不满足时结束
     return
   }
+  consoleDivisionLine()
+
   let learnEnd: boolean = false
+
+  // 获取需要学习的用户
+  const user: User = await managementUser()
+
   while (!learnEnd) {
-    // 获取需要学习的用户
-    const user: User = await managementUser()
-    consoleDivisionLine()
     try {
       // 开始学习
       await startLearn(user)
@@ -28,6 +31,7 @@ async function main(): Promise<void> {
           consoleDivisionLineByText(`${user.username} 账号，密码错误！`)
           break
       }
+      console.log(e)
       // 学习过程中报错重新选择用户学习
       consoleDivisionLineByText('学习过程中出错，重新开始学习！')
     }

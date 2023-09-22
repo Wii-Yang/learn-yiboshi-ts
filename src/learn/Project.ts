@@ -71,8 +71,13 @@ async function openProject(url: string, user: User): Promise<void> {
   const courseList: WebElement[] = await browser.findElements(By.className('striped--near-white'))
 
   for (let i: number = 1; i < courseList.length; i++) {
-    // 学习课程
-    await learnCourse(courseList[i], user)
+    try {
+      // 学习课程
+      await learnCourse(courseList[i], user)
+    } catch (e) {
+      await browser.quit()
+      throw e
+    }
 
     if (i === courseList.length - 1) {
       consoleDivisionLineByText(`完成《${projectName}》项目学习`)

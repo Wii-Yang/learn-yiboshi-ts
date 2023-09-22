@@ -38,13 +38,20 @@ export default async function startLearn(user: User): Promise<void> {
   const projects: WebElement[] = await getMyProjects(browser)
 
   for (let i: number = 0; i < projects.length; i++) {
-    // 学习项目
-    await learnProject(projects[i], user)
+    try {
+      // 学习项目
+      await learnProject(projects[i], user)
+    } catch (e) {
+      await browser.quit()
+      throw e
+    }
 
     if (i === projects.length - 1) {
       consoleDivisionLineByText('已完成所有项目学习')
     }
   }
+
+  await browser.quit()
 }
 
 /**

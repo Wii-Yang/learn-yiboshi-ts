@@ -3,10 +3,12 @@ import User from '../user'
 import { createBrowserByUrl } from '../browser'
 
 export async function examination(examinationButton: WebElement, user: User): Promise<void> {
-  await examinationButton.click()
-
-  // 浏览器切换到考试页
   const browser: WebDriver = examinationButton.driver_
+  // 浏览器滚动到考试
+  await browser.executeScript('arguments[0].scrollIntoView(false);', examinationButton)
+
+  await examinationButton.click()
+  // 浏览器切换到考试页
   const courseWindowHandle: string = await browser.getWindowHandle()
   const allWindowHandles: string[] = await browser.getAllWindowHandles()
   const examinationWindowHandle: string | undefined = allWindowHandles.find(
@@ -64,9 +66,14 @@ async function openExamination(url: string, user: User): Promise<void> {
     }
   }
 
-  await answerChoiceQuestions(choiceQuestions)
-  await answerMultipleChoiceQuestions(multipleChoiceQuestions)
-  await answerJudgingQuestions(judgingQuestions)
+  try {
+    await answerChoiceQuestions(choiceQuestions)
+    await answerMultipleChoiceQuestions(multipleChoiceQuestions)
+    await answerJudgingQuestions(judgingQuestions)
+  } catch (e) {
+    await browser.quit()
+    throw 'examinationError'
+  }
 
   // 答题完成关闭答题页
   await browser.quit()
