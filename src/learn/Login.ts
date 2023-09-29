@@ -4,6 +4,21 @@ import { consoleDivisionLineByText } from '../utils/DivisionLine'
 import { updateUser } from '../user/DataBase'
 
 export async function login(browser: WebDriver, user: User): Promise<void> {
+  try {
+    // 处理2023年9月29日中秋国庆放假通知
+    const reminderDisk = await browser.wait(
+      until.elementLocated(By.className('reminderDisk_ybs')),
+      1000
+    )
+    const reminderDiskMain = await reminderDisk.findElement(By.className('reminderDisk_ybs_main'))
+    const reminderDiskClose = await reminderDiskMain.findElement(
+      By.className('reminderDisk_ybs_close')
+    )
+    await reminderDiskClose.click()
+  } catch (e) {
+    /* empty */
+  }
+
   // 获取 new_login_box
   const newLoginBox: WebElement = await browser.wait(
     until.elementLocated(By.className('new_login_box'))
