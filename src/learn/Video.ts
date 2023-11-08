@@ -121,7 +121,7 @@ async function openVideo(url: string, user: User): Promise<void> {
 async function completeViewing(browser: WebDriver): Promise<boolean> {
   const videoDabiao: WebElement = await browser.findElement(By.className('video_dabiao'))
   const videoDabiaoText: string = await videoDabiao.getText()
-  const value: string[] | null = videoDabiaoText.match(/[0-9]{1,2}/g) as string[] | null
+  const value: string[] | null = videoDabiaoText.match(/[0-9]{1,3}/g) as string[] | null
   if (value && value.length === 2) {
     value.toString()
     if (Number(value[0]) <= Number(value[1])) {
