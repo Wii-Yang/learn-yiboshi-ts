@@ -6,7 +6,7 @@
   "author": "wii_yang",
   "main": "lib/index.js",
   "scripts": {
-    "bootstrap": "pnpm install && husky install",
+    "bootstrap": "pnpm install",
     "build": "tsc",
     "commit": "czg",
     "lint": "lint-staged",

@@ -30,10 +30,11 @@ async function main(): Promise<void> {
         case 'loginError':
           consoleDivisionLineByText(`${user.username} 账号，密码错误！`)
           break
+        default:
+          // 学习过程中报错重新选择用户学习
+          consoleDivisionLineByText('学习过程中出错，重新开始学习！')
       }
       console.log(e)
-      // 学习过程中报错重新选择用户学习
-      consoleDivisionLineByText('学习过程中出错，重新开始学习！')
     }
   }
 }

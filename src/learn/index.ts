@@ -4,6 +4,8 @@ import { createBrowser } from '../browser'
 import { login } from './Login'
 import { learnProject } from './Project'
 import { consoleDivisionLineByText } from '../utils/DivisionLine'
+import { getCourseList, learnCourse } from './Course'
+import { waitAndCloseDialog } from '../utils'
 
 /**
  * 开始学习
@@ -31,27 +33,76 @@ export default async function startLearn(user: User): Promise<void> {
     await login(browser, user)
   }
 
-  // 切换到“我的项目”
-  await changeToMyProjects(browser)
+  // 等待弹窗出现
+  await waitAndCloseDialog(browser)
 
-  // 获取项目列表
-  const projects: WebElement[] = await getMyProjects(browser)
+  // 获取“我的课程”
+  const curriculums: WebElement[] = await getMyCurriculums(browser)
 
-  for (let i: number = 0; i < projects.length; i++) {
-    try {
-      // 学习项目
-      await learnProject(projects[i], user)
-    } catch (e) {
-      await browser.quit()
-      throw e
-    }
+  for (let i: number = 0; i < curriculums.length; i++) {
+    const text = await curriculums[i].getText()
+    // 切换到对应课程
+    await curriculums[i].click()
+    if (text.search('继续医学教育（远程）项目') >= 0) {
+      // 切换到“我的项目”
+      await changeToMyProjects(browser)
 
-    if (i === projects.length - 1) {
+      // 获取项目列表
+      const projects: WebElement[] = await getMyProjects(browser)
+
+      for (let i: number = 0; i < projects.length; i++) {
+        try {
+          // 学习项目
+          await learnProject(projects[i], user)
+        } catch (e) {
+          await browser.quit()
+          throw e
+        }
+      }
       consoleDivisionLineByText('已完成所有项目学习')
+    } else {
+      // 获取项目列表
+      const projects: WebElement[] = await browser.findElements(By.className('el-collapse-item'))
+      for (let i = 0; i < projects.length; i++) {
+        const header = await projects[i].findElement(By.className('el-collapse-item__header'))
+        // 判断是否打开项目
+        const classNames = await projects[i].getAttribute('class')
+        if (classNames.search('is-active') < 0) {
+          // 打开项目
+          await header.click()
+        }
+
+        // 获取课程列表
+        const courseList: WebElement[] = await getCourseList(browser, projects[i])
+        for (let j: number = 1; j < courseList.length; j++) {
+          try {
+            // 学习课程
+            await learnCourse(courseList[j], user, 1)
+          } catch (e) {
+            await browser.quit()
+            throw e
+          }
+        }
+
+        // 获取项目名称
+        const projectName = await header.getText()
+
+        consoleDivisionLineByText(`已完成《${projectName}》项目学习`)
+      }
+      consoleDivisionLineByText(`完成《${text}》课程学习`)
     }
   }
 
   await browser.quit()
+}
+
+/**
+ * 获取“我的课程”项目列表
+ */
+async function getMyCurriculums(browser: WebDriver): Promise<WebElement[]> {
+  // 获取 nupt_main
+  const nuptMain = browser.findElement(By.className('nupt_main'))
+  return nuptMain.findElements(By.tagName('a'))
 }
 
 /**
