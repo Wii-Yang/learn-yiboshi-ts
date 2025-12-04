@@ -269,5 +269,7 @@ async function viewResults(type: string, index: number, browser: WebDriver): Pro
   async function closeResultsDiolag(): Promise<void> {
     const closeButton: WebElement = await browser.findElement(By.className('sbd_qding'))
     await closeButton.click()
+
+    await browser.sleep(1000 * (3 + Math.random() * 2))
   }
 }
