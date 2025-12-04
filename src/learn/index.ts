@@ -15,7 +15,7 @@ export default async function startLearn(user: User): Promise<void> {
   const browser: WebDriver = await createBrowser()
 
   // 访问医博士网站
-  await browser.get('http://www.yiboshi.com')
+  await browser.get('https://www.yiboshi.com')
 
   // 获取 token 和 fingerprintID
   if (user.token) {
@@ -26,9 +26,9 @@ export default async function startLearn(user: User): Promise<void> {
   }
 
   // 更新网页
-  await browser.get('http://www.yiboshi.com/usercenter/index')
+  await browser.get('https://www.yiboshi.com/usercenter/index')
   const url: string = await browser.getCurrentUrl()
-  if (url === 'http://www.yiboshi.com/') {
+  if (url === 'https://www.yiboshi.com/') {
     // 未登录或登录失效时登录
     await login(browser, user)
   }
