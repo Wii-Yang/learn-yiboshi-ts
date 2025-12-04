@@ -36,7 +36,7 @@ export async function createBrowser(): WebDriver {
  */
 export async function createBrowserByUrl(url: string, user: User): WebDriver {
   const browser: WebDriver = await createBrowser()
-  await browser.get('http://www.yiboshi.com/')
+  await browser.get('https://www.yiboshi.com/')
   await browser.executeScript(`localStorage.setItem('www_5HGGWrXN_token', '${user.token}');`)
   await browser.executeScript(`localStorage.setItem('FingerprintID', '${user.fingerprintID}');`)
   await browser.get(url)
