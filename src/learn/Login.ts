@@ -36,6 +36,12 @@ export async function login(browser: WebDriver, user: User): Promise<void> {
   // 输入密码
   await nlbInputList[1].findElement(By.tagName('input')).sendKeys(user.password)
 
+  // 获取 nlb_useragreenment
+  const nlbUseragreenment: WebElement = await nlbMain.findElement(By.className('nlb_useragreenment'))
+  // 获取 el-checkbox
+  const elCheckbox: WebElement = await nlbUseragreenment.findElement(By.className('el-checkbox'))
+  await elCheckbox.click()
+
   // 获取 nlb_btn
   const nlbBtn: WebElement = await nlbMain.findElement(By.className('nlb_btn'))
   // 点击登录按钮
