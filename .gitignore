@@ -6,4 +6,5 @@ node_modules
 lib
 
 chromedriver.exe
+chromedriver
 user.json
