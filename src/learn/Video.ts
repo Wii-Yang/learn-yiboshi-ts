@@ -55,6 +55,8 @@ async function loading(browser: WebDriver): Promise<void> {
     return vmlmIngList.length > 0
   })
 
+  await browser.sleep(2000)
+
   await continueLearningVideo(browser)
 }
 
