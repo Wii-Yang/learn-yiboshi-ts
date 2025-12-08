@@ -33,8 +33,8 @@ async function main(): Promise<void> {
         default:
           // 学习过程中报错重新选择用户学习
           consoleDivisionLineByText('学习过程中出错，重新开始学习！')
+          break
       }
-      console.log(e)
     }
   }
 }
