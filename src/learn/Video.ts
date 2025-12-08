@@ -138,7 +138,7 @@ async function completeViewing(browser: WebDriver): Promise<boolean> {
  * @param browser
  */
 async function continueLearningVideo(browser: WebDriver): Promise<void> {
-  const messageBoxes: WebElement = await browser.findElements(
+  const messageBoxes: WebElement[] = await browser.findElements(
     By.className('el-message-box__wrapper')
   )
   for (let i: number = 0; i < messageBoxes.length; i++) {
@@ -150,6 +150,22 @@ async function continueLearningVideo(browser: WebDriver): Promise<void> {
           By.className('el-message-box__btns')
         )
         const button: WebElement = await messageBoxBtns.findElement(By.tagName('button'))
+        await button.click()
+
+        await browser.sleep(1000)
+      }
+    }
+  }
+
+  const dialogs: WebElement[] = await browser.findElements(By.className('el-dialog__wrapper'))
+
+  for (let i = 0; i < dialogs.length; i++) {
+    const style: string = await dialogs[i].getAttribute('style')
+    if (style.search('display: none') < 0) {
+      const dialog = await dialogs[i].findElement(By.className('el-dialog'))
+      const ariaLabel: string = await dialog.getAttribute('aria-label')
+      if (ariaLabel === '温馨提示') {
+        const button: WebElement = await dialog.findElement(By.className('el-button'))
         await button.click()
 
         await browser.sleep(1000)
