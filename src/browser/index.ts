@@ -12,6 +12,7 @@ export async function createBrowser(): WebDriver {
 
   // 浏览器配置
   const options: Options = new Options()
+  options.addArguments('--headless')
   options.addArguments('--ignore-certificate-errors')
   options.addArguments('--ignore-ssl-errors')
 
