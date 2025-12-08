@@ -20,11 +20,6 @@ export async function learnCourse(
   const courseLearnStatus: string = await tdList[3 + index].getText()
 
   if (courseLearnStatus === '未学习' || courseLearnStatus === '学习中') {
-    // 视频
-    const k1: WebElement = await tdList[4 + index].findElement(By.className('k1'))
-    await watchVideo(k1, user)
-    consoleDivisionLineByText(`《${courseName}》课程完成学习`)
-
     // 课程考试状态
     const td5A: WebElement = await tdList[5 + index].findElement(By.className('k3'))
     const courseExamStatus: string = await td5A.getText()
@@ -34,6 +29,11 @@ export async function learnCourse(
       await examination(td5A, user)
       consoleDivisionLineByText(`《${courseName}》课程完成考试`)
     }
+
+    // 视频
+    const k1: WebElement = await tdList[4 + index].findElement(By.className('k1'))
+    await watchVideo(k1, user)
+    consoleDivisionLineByText(`《${courseName}》课程完成学习`)
   }
 }
 
