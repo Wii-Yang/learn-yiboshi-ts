@@ -4,11 +4,17 @@
   "description": "",
   "main": "dist/index.js",
   "scripts": {
+    "dev": "node src/index.ts",
     "build": "tsc"
   },
-  "dependencies": {},
   "devDependencies": {
-    "typescript": "^5.5.3"
+    "@eslint/js": "^9.39.1",
+    "@eslint/json": "^0.14.0",
+    "@eslint/markdown": "^7.5.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "typescript": "^5.5.3",
+    "typescript-eslint": "^8.49.0"
   },
   "private": true
 }
