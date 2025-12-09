@@ -1,0 +1,10 @@
+# Ignore artifacts:
+/node_modules
+dist
+
+.vscode/*
+.idea/*
+
+chromedriver.exe
+chromedriver
+user.json

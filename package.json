@@ -12,7 +12,11 @@
     "@eslint/json": "^0.14.0",
     "@eslint/markdown": "^7.5.1",
     "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
     "globals": "^16.5.0",
+    "jiti": "^2.6.1",
+    "prettier": "3.7.4",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.49.0"
   },
