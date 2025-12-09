@@ -84,6 +84,8 @@ async function openVideo(url: string, user: User): Promise<void> {
     await plyrControl.click()
   }
 
+  await changeVideoClarity(browser)
+
   try {
     // 等待视频播放结束
     await browser.wait(
@@ -171,5 +173,21 @@ async function continueLearningVideo(browser: WebDriver): Promise<void> {
         await browser.sleep(1000)
       }
     }
+  }
+}
+
+/**
+ * 切换清晰度
+ * @param browser
+ */
+async function changeVideoClarity(browser: WebDriver): Promise<void> {
+  // 清晰度
+  const vmQingxi: WebElement = await browser.findElement(By.className('vm_qingxi'))
+  // 开关
+  const elSwitch: WebElement = await vmQingxi.findElement(By.className('el-switch'))
+  // 判断是否是高清
+  const switchClassName: string = await elSwitch.getAttribute('class')
+  if (switchClassName.search('is-checked') >= 0) {
+    await elSwitch.click()
   }
 }
