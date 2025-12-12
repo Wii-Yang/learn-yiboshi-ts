@@ -89,8 +89,7 @@ export async function learnContinueCourse(browser: WebDriver, user: User): Promi
         }
       }
     } while (projectList.length > 0);
-  } catch (e) {
-    console.error(e);
+  } catch {
     await learnContinueCourse(browser, user);
   }
 }
