@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "pnpm": "pnpm run bootstrap",
+    "bootstrap": "pnpm install",
     "dev": "tsc && node src/index.ts",
     "build": "",
     "lint": "npx lint-staged"
