@@ -5,8 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "pnpm": "pnpm run bootstrap",
     "dev": "tsc && node src/index.ts",
-    "prepare": "husky install"
+    "build": ""
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
