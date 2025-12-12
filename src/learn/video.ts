@@ -33,7 +33,7 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
       return false;
     });
 
-    await changeVideoClarity(browser);
+    // await changeVideoClarity(browser);
 
     const vm_video: WebElement = await browser.findElement(By.css('.video_main .vm_video'));
     const plyr: WebElement = await vm_video.findElement(By.className('plyr'));
@@ -85,7 +85,7 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
  * 切换清晰度
  * @param browser
  */
-async function changeVideoClarity(browser: WebDriver): Promise<void> {
+export async function changeVideoClarity(browser: WebDriver): Promise<void> {
   // 清晰度
   const vmQingxi: WebElement = await browser.findElement(By.className('vm_qingxi'));
   // 开关
