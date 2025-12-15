@@ -50,13 +50,16 @@ async function openProject(url: string, user: User): Promise<void> {
 
           // 考试
           await examination(td[td.length - 2]!, courseName, user);
-          // 播放视频
-          await playVideo(td[td.length - 3]!, courseName, user);
 
-          console.log(`完成【${courseName}】课程学习\n`);
+          try {
+            // 播放视频
+            await playVideo(td[td.length - 3]!, courseName, user);
 
-          // 刷新网页
-          await browser.navigate().refresh();
+            console.log(`完成【${courseName}】课程学习\n`);
+          } finally {
+            // 刷新网页
+            await browser.navigate().refresh();
+          }
           break;
         }
 

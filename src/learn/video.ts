@@ -75,6 +75,7 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
     console.log(`完成【${courseName}】课程视频`);
   } catch {
     console.error('\n视频播放过程中出现错误\n');
+    throw 'play video';
   } finally {
     await browser.quit();
   }
