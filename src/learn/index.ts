@@ -15,7 +15,7 @@ async function startLearn(user: User) {
     await browser.wait(until.elementLocated(By.className('nupt_main')));
     await browser.wait(async () => {
       const nupt_main: WebElement = await browser.findElement(By.className('nupt_main'));
-      const a: WebElement[] = await nupt_main.findElements(By.tagName('a'));
+      const a: WebElement[] = await nupt_main.findElements(By.css('a'));
       return a.length > 0;
     });
 

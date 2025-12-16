@@ -130,7 +130,7 @@ async function closeDialog(browser: WebDriver): Promise<void> {
       const style: string = await messageBoxes[i]!.getAttribute('style');
       if (style.search('display: none') < 0) {
         const messageBoxBtns: WebElement = await messageBoxes[i]!.findElement(By.className('el-message-box__btns'));
-        const button: WebElement = await messageBoxBtns.findElement(By.tagName('button'));
+        const button: WebElement = await messageBoxBtns.findElement(By.css('button'));
         await button.click();
       }
     }

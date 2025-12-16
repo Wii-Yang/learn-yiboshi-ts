@@ -38,7 +38,7 @@ async function openProject(url: string, user: User): Promise<void> {
       const tr: WebElement[] = await browser.findElements(By.css('.nupmrm_content table tbody tr'));
 
       for (let i: number = 1; i < tr.length; i++) {
-        const td: WebElement[] = await tr[i]!.findElements(By.tagName('td'));
+        const td: WebElement[] = await tr[i]!.findElements(By.css('td'));
         // 课程名称
         const courseName: string = await td[1]!.getText();
 

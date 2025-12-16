@@ -23,9 +23,9 @@ async function loginUser(user: User): Promise<void> {
     const nlbInputList: WebElement[] = await nlbMain.findElements(By.className('nlb_input'));
 
     console.log('【输入用户名】');
-    await nlbInputList[0]!.findElement(By.tagName('input')).sendKeys(user.getUsername());
+    await nlbInputList[0]!.findElement(By.css('input')).sendKeys(user.getUsername());
     console.log('【输入密码】');
-    await nlbInputList[1]!.findElement(By.tagName('input')).sendKeys(user.getPassword());
+    await nlbInputList[1]!.findElement(By.css('input')).sendKeys(user.getPassword());
 
     // 获取 nlb_useragreenment
     const nlbUseragreenment: WebElement = await nlbMain.findElement(By.className('nlb_useragreenment'));

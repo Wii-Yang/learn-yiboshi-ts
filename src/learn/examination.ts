@@ -84,7 +84,7 @@ async function openExamination(url: string, user: User, courseName: string): Pro
 async function viewResults(type: string, index: number, browser: WebDriver): Promise<boolean> {
   // 获取交卷按钮
   const sjmSubmit: WebElement = await browser.findElement(By.className('sjm_submit'));
-  const submit: WebElement = await sjmSubmit.findElement(By.tagName('a'));
+  const submit: WebElement = await sjmSubmit.findElement(By.css('a'));
 
   // 浏览器滚动到交卷按钮
   await browser.executeScript('arguments[0].scrollIntoView();', submit);
@@ -118,9 +118,9 @@ async function viewResults(type: string, index: number, browser: WebDriver): Pro
 
     if (title.search(type) >= 0) {
       // 答案结果列表
-      const lis: WebElement[] = await sbdmMains[i]!.findElements(By.tagName('li'));
+      const lis: WebElement[] = await sbdmMains[i]!.findElements(By.css('li'));
 
-      const use: WebElement = await lis[index]!.findElement(By.tagName('use'));
+      const use: WebElement = await lis[index]!.findElement(By.css('use'));
       const xlink: string = await use.getAttribute('xlink:href');
 
       if (xlink === '#icon-selected') {

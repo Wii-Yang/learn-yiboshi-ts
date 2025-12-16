@@ -24,7 +24,7 @@ async function getProjectList(nupm_right: WebElement): Promise<WebElement[]> {
   // 点击搜索按钮
   const nupmr_main: WebElement = await nupm_right.findElement(By.className('nupmr_main'));
   const npm_case2: WebElement = await nupmr_main.findElement(By.className('npm_case2'));
-  const input_list: WebElement[] = await npm_case2.findElements(By.tagName('input'));
+  const input_list: WebElement[] = await npm_case2.findElements(By.css('input'));
   for (let i: number = 0; i < input_list.length; i++) {
     const input: WebElement = input_list[i]!;
     const input_type: string = await input.getAttribute('value');
@@ -54,7 +54,7 @@ export async function learnContinueCourse(browser: WebDriver, user: User): Promi
 
     // 切换到“我的项目”
     const nupmr_title__list: WebElement[] = await nupm_right.findElements(By.css('.nupmr_title a'));
-    for (let i = 0; i < nupmr_title__list.length; i++) {
+    for (let i: number = 0; i < nupmr_title__list.length; i++) {
       const nupmr_title: WebElement = nupmr_title__list[i]!;
       const nupmr_title__text: string = await nupmr_title.getText();
       if (nupmr_title__text === '我的项目') {
@@ -69,10 +69,10 @@ export async function learnContinueCourse(browser: WebDriver, user: User): Promi
     let projectList: WebElement[] = [];
     do {
       const nupmrm_case: WebElement = await nupm_right.findElement(By.className('nupmrm_case'));
-      const nupmrm_case__label_list: WebElement[] = await nupmrm_case.findElements(By.tagName('label'));
+      const nupmrm_case__label_list: WebElement[] = await nupmrm_case.findElements(By.css('label'));
 
-      for (let i = nupmrm_case__label_list.length - 1; i >= 0; i--) {
-        const nupmrm_case__label = nupmrm_case__label_list[i]!;
+      for (let i: number = nupmrm_case__label_list.length - 1; i >= 0; i--) {
+        const nupmrm_case__label: WebElement = nupmrm_case__label_list[i]!;
         const nupmrm_case__label_text: string = await nupmrm_case__label.getText();
 
         if (nupmrm_case__label_text === '学习中' || nupmrm_case__label_text === '未学习') {
@@ -85,6 +85,7 @@ export async function learnContinueCourse(browser: WebDriver, user: User): Promi
 
             // 学习项目
             await learnProject(project, user);
+            break;
           }
         }
       }
