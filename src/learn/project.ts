@@ -3,6 +3,7 @@ import type User from '../user/index.ts';
 import { createBrowserByURL } from '../system/browser.ts';
 import { examination } from './examination.ts';
 import { playVideo } from './video.ts';
+import { closeDialog } from './utils.ts';
 
 // 学习项目
 export async function learnProject(project: WebElement, user: User) {
@@ -95,40 +96,4 @@ async function awaitProjectLoading(browser: WebDriver): Promise<void> {
 
     return !!title;
   });
-}
-
-/**
- * 关闭对话框
- * @param browser
- */
-async function closeDialog(browser: WebDriver): Promise<void> {
-  const dialog_list: WebElement[] = await browser.findElements(By.className('el-dialog__wrapper'));
-
-  for (let i: number = 1; i < dialog_list.length; i++) {
-    const dialog: WebElement = dialog_list[i]!;
-    const display: string = await dialog.getCssValue('display');
-    if (display !== 'none') {
-      const el_dialog: WebElement = await dialog.findElement(By.className('el-dialog'));
-      const aria_label: string = await el_dialog.getAttribute('aria-label');
-      switch (aria_label) {
-        case '提示': {
-          // 勾选“记住选择，不再提示”复选框
-          const checkbox: WebElement = await el_dialog.findElement(
-            By.css('.el-dialog__body .dialog_content .dialog_content_message .el-checkbox'),
-          );
-          await checkbox.click();
-
-          // 点击“否”按钮
-          const button: WebElement = await el_dialog.findElement(
-            By.css('.el-dialog__footer .dialog-footer .el-button--default'),
-          );
-          await button.click();
-          break;
-        }
-        default:
-          console.error('项目页出现未处理对话框');
-          throw 'exit';
-      }
-    }
-  }
 }
