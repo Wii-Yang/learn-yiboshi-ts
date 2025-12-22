@@ -12,7 +12,7 @@ import { createBrowserByURL } from '../system/browser.ts';
 export async function examination(button: WebElement, courseName: string, user: User) {
   // 判断考试是否完成
   const k3: string = await button.findElement(By.className('k3')).getText();
-  if (k3 === '考试[最高100分]') {
+  if (k3 === '考试[最高100分]' || k3 === '练习[最高100分]') {
     return;
   }
 
