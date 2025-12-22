@@ -19,6 +19,8 @@ export async function createBrowser(options: BrowserOptions = { headless: true }
 
   // 浏览器配置
   const chromeOptions: Options = new Options();
+  // 减少在 win 运行时的日志打印
+  chromeOptions.addArguments('--log-level=3');
   if (options.headless) {
     chromeOptions.addArguments('--headless');
   }
