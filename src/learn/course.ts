@@ -135,7 +135,7 @@ export async function learnOtherCourse(browser: WebDriver, user: User): Promise<
       );
 
       for (let i: number = npm_caseDiv1_right_list.length - 1; i >= 0; i--) {
-        const projectList = [];
+        const projectList: WebElement[] = [];
         const npm_caseDiv1_right: WebElement = npm_caseDiv1_right_list[i]!;
         const text: string = await npm_caseDiv1_right.getText();
         if (text === '学习中' || text === '未学习') {
@@ -206,10 +206,10 @@ export async function learnOtherCourse(browser: WebDriver, user: User): Promise<
               }
             }
           }
+        }
 
-          if (i == 0) {
-            isEnd = true;
-          }
+        if (i == 0) {
+          isEnd = true;
         }
       }
     } while (!isEnd);
