@@ -72,6 +72,7 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
       }
       return await isCompleted(browser);
     });
+    await browser.sleep(1000 * 2);
     console.log(`完成【${courseName}】课程视频`);
   } catch {
     console.error('\n视频播放过程中出现错误\n');
