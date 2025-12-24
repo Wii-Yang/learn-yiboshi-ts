@@ -110,7 +110,14 @@ async function awaitOtherCourseLoading(browser: WebDriver): Promise<boolean> {
 
     const el_loading_mask: WebElement = await nup_main.findElement(By.className('el-loading-mask'));
     const el_loading_mask__style: string = await el_loading_mask.getCssValue('display');
-    return el_loading_mask__style === 'none';
+    if (el_loading_mask__style !== 'none') {
+      return false;
+    }
+
+    const collapse_list: WebElement[] = await nup_main.findElements(
+      By.css('.nupm_rightAll .nupmr_main .nupmrm_content .el-collapse .el-collapse-item'),
+    );
+    return collapse_list.length > 0;
   });
 }
 
