@@ -104,6 +104,7 @@ export async function learnContinueCourse(browser: WebDriver, user: User): Promi
  */
 async function awaitOtherCourseLoading(browser: WebDriver): Promise<boolean> {
   await browser.wait(until.elementLocated(By.className('nup_main')));
+  await browser.sleep(1000);
   return browser.wait(async (): Promise<boolean> => {
     const nup_main: WebElement = await browser.findElement(By.className('nup_main'));
 
