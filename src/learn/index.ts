@@ -3,6 +3,7 @@ import { createBrowserByURL } from '../system/browser.ts';
 import Config from '../system/config.ts';
 import { By, until, type WebDriver, type WebElement } from 'selenium-webdriver';
 import { learnContinueCourse, learnOtherCourse } from './course.ts';
+import { closeDialog } from './utils.ts';
 
 async function startLearn(user: User) {
   // 进入用户中心
@@ -18,6 +19,7 @@ async function startLearn(user: User) {
       const a: WebElement[] = await nupt_main.findElements(By.css('a'));
       return a.length > 0;
     });
+    await closeDialog(browser);
 
     // 获取课程列表
     const courseList: WebElement[] = await browser.findElements(By.css('.nupt_main a'));
