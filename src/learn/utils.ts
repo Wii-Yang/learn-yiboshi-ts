@@ -1,5 +1,9 @@
 import { By, type WebDriver, type WebElement } from 'selenium-webdriver';
 
+/**
+ * 获取跳转后网址
+ * @param button
+ */
 export async function getRedirectURLByButton(button: WebElement): Promise<string> {
   const browser: WebDriver = button.getDriver();
 
@@ -11,7 +15,11 @@ export async function getRedirectURLByButton(button: WebElement): Promise<string
   // 跳转
   await browser.executeScript('arguments[0].scrollIntoView(false);', button);
   await button.click();
-  await browser.sleep(2000);
+
+  await browser.wait(async () => {
+    const newHandles = await browser.getAllWindowHandles();
+    return newHandles.length > beforeAllWindowHandles.length;
+  });
 
   // 跳转后所有窗口
   const afterAllWindowHandles: string[] = await browser.getAllWindowHandles();
