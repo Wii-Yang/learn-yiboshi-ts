@@ -193,17 +193,17 @@ export async function learnOtherCourse(browser: WebDriver, user: User): Promise<
               // 获取课程名称
               const course_name: string = await td[1]!.findElement(By.className('course_name')).getText();
               // 获取课程状态
-              const course_status: string = await td[td.length - 4]!.getText();
+              const course_status: string = await td[5]!.getText();
 
               if (course_status === '未学习' || course_status === '学习中') {
                 console.log(`开始【${course_name}】课程学习`);
 
                 // 考试
-                await examination(td[td.length - 2]!, course_name, user);
+                await examination(td[7]!, course_name, user);
 
                 try {
                   // 播放视频
-                  await playVideo(td[td.length - 3]!, course_name, user);
+                  await playVideo(td[6]!, course_name, user);
 
                   console.log(`完成【${course_name}】课程学习\n`);
                 } finally {

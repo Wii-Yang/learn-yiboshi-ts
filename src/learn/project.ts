@@ -44,17 +44,17 @@ async function openProject(url: string, user: User): Promise<void> {
         const courseName: string = await td[1]!.getText();
 
         // 获取课程状态
-        const courseStatus: string = await td[td.length - 4]!.getText();
+        const courseStatus: string = await td[3]!.getText();
 
         if (courseStatus === '学习中' || courseStatus === '未学习') {
           console.log(`开始【${courseName}】课程学习`);
 
           // 考试
-          await examination(td[td.length - 2]!, courseName, user);
+          await examination(td[5]!, courseName, user);
 
           try {
             // 播放视频
-            await playVideo(td[td.length - 3]!, courseName, user);
+            await playVideo(td[4]!, courseName, user);
 
             console.log(`完成【${courseName}】课程学习\n`);
           } finally {
