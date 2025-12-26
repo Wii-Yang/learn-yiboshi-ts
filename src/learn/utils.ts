@@ -13,6 +13,7 @@ export async function getRedirectURLByButton(button: WebElement): Promise<string
   const beforeAllWindowHandles: string[] = await browser.getAllWindowHandles();
 
   // 跳转
+  await closeDialog(browser);
   await browser.executeScript('arguments[0].scrollIntoView(false);', button);
   await button.click();
 

@@ -133,9 +133,6 @@ export async function learnOtherCourse(browser: WebDriver, user: User): Promise<
       // 等待课程列表加载
       await awaitOtherCourseLoading(browser);
 
-      await browser.sleep(3000);
-      await closeDialog(browser);
-
       const nup_main: WebElement = await browser.findElement(By.className('nup_main'));
 
       const npm_caseDiv1_right_list: WebElement[] = await nup_main.findElements(
@@ -147,6 +144,7 @@ export async function learnOtherCourse(browser: WebDriver, user: User): Promise<
         const npm_caseDiv1_right: WebElement = npm_caseDiv1_right_list[i]!;
         const text: string = await npm_caseDiv1_right.getText();
         if (text === '学习中' || text === '未学习') {
+          await closeDialog(browser);
           await browser.executeScript('arguments[0].scrollIntoView(false);', npm_caseDiv1_right);
           await npm_caseDiv1_right.click();
 
@@ -157,6 +155,7 @@ export async function learnOtherCourse(browser: WebDriver, user: User): Promise<
             const input: WebElement = npm_caseDiv9_right_list[j]!;
             const type: string = await input.getAttribute('type');
             if (type === 'button') {
+              await closeDialog(browser);
               await browser.executeScript('arguments[0].scrollIntoView(false);', input);
               await input.click();
               break;
@@ -174,6 +173,7 @@ export async function learnOtherCourse(browser: WebDriver, user: User): Promise<
             const collapse_item: WebElement = collapse_list[j]!;
             const class_names: string = await collapse_item.getAttribute('class');
             if (class_names.search('is-active') < 0) {
+              await closeDialog(browser);
               await browser.executeScript('arguments[0].scrollIntoView(false);', collapse_item);
               await collapse_item.click();
             }
@@ -187,31 +187,28 @@ export async function learnOtherCourse(browser: WebDriver, user: User): Promise<
           }
 
           if (projectList.length > 0) {
-            for (let j: number = 0; j < projectList.length; j++) {
-              const course: WebElement = projectList[j]!;
-              const td: WebElement[] = await course.findElements(By.css('td'));
-              // 获取课程名称
-              const course_name: string = await td[1]!.findElement(By.className('course_name')).getText();
-              // 获取课程状态
-              const course_status: string = await td[5]!.getText();
+            const course: WebElement = projectList[0]!;
+            await browser.wait(async () => {
+              const tds: WebElement[] = await projectList[0]!.findElements(By.css('td'));
+              return await tds[1]!.findElement(By.className('course_name')).getText();
+            });
+            const td: WebElement[] = await course.findElements(By.css('td'));
+            // 获取课程名称
+            const course_name: string = await td[1]!.findElement(By.className('course_name')).getText();
 
-              if (course_status === '未学习' || course_status === '学习中') {
-                console.log(`开始【${course_name}】课程学习`);
+            console.log(`开始【${course_name}】课程学习`);
 
-                // 考试
-                await examination(td[7]!, course_name, user);
+            // 考试
+            await examination(td[7]!, course_name, user);
 
-                try {
-                  // 播放视频
-                  await playVideo(td[6]!, course_name, user);
+            try {
+              // 播放视频
+              await playVideo(td[6]!, course_name, user);
 
-                  console.log(`完成【${course_name}】课程学习\n`);
-                } finally {
-                  // 刷新网页
-                  await browser.navigate().refresh();
-                }
-                break;
-              }
+              console.log(`完成【${course_name}】课程学习\n`);
+            } finally {
+              // 刷新网页
+              await browser.navigate().refresh();
             }
           }
         }
