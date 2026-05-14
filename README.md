@@ -84,3 +84,7 @@
 
 > - chromedriver 文件需要在本项目根目录
 > - chromedriver 版本需要与本机 chrome 版本一致
+
+## 开源协议
+
+本项目基于 Apache License 2.0 开源。
