@@ -3,13 +3,14 @@ import type User from '../user/index.ts';
 import { createBrowserByURL } from '../system/browser.ts';
 import { examination } from './examination.ts';
 import { playVideo } from './video.ts';
-import { closeDialog } from './utils.ts';
+import { closeDialog, getRedirectURLByButton } from './utils.ts';
 
 // 学习项目
 export async function learnProject(project: WebElement, user: User) {
   // 获取项目链接
   const npcb_txt: WebElement = await project.findElement(By.css('.npcb_txt a'));
-  const url: string = await npcb_txt.getAttribute('href');
+
+  const url = await getRedirectURLByButton(npcb_txt);
 
   await openProject(url, user);
 }
@@ -49,12 +50,12 @@ async function openProject(url: string, user: User): Promise<void> {
         if (courseStatus === '学习中' || courseStatus === '未学习') {
           console.log(`开始【${courseName}】课程学习`);
 
-          // 考试
-          await examination(td[5]!, courseName, user);
-
           try {
             // 播放视频
             await playVideo(td[4]!, courseName, user);
+
+            // 考试
+            await examination(td[5]!, courseName, user);
 
             console.log(`完成【${courseName}】课程学习\n`);
           } finally {
