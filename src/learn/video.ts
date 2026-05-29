@@ -111,6 +111,7 @@ async function isCompleted(browser: WebDriver): Promise<boolean> {
     if (progressList[0]! <= progressList[1]!) {
       progressText += '\n';
       process.stdout.write(progressText);
+      await browser.sleep(2000);
       return true;
     }
     process.stdout.write(progressText);
