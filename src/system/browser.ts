@@ -21,8 +21,13 @@ export async function createBrowser(options: BrowserOptions = { headless: true }
   const chromeOptions: Options = new Options();
   // 减少在 win 运行时的日志打印
   chromeOptions.addArguments('--log-level=3');
+  chromeOptions.addArguments('--autoplay-policy=no-user-gesture-required');
+  chromeOptions.addArguments('--disable-background-timer-throttling');
+  chromeOptions.addArguments('--disable-backgrounding-occluded-windows');
+  chromeOptions.addArguments('--disable-renderer-backgrounding');
+  chromeOptions.addArguments('--window-size=1600,1000');
   if (options.headless) {
-    // chromeOptions.addArguments('--headless');
+    chromeOptions.addArguments('--headless=new');
   }
   if (options.muteAudio) {
     chromeOptions.addArguments('--mute-audio');

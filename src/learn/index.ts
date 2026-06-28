@@ -5,6 +5,30 @@ import { By, until, type WebDriver, type WebElement } from 'selenium-webdriver';
 import { learnContinueCourse, learnOtherCourse } from './course.ts';
 import { closeDialog } from './utils.ts';
 
+type CoursePageType = 'project' | 'other';
+
+async function getCoursePageType(browser: WebDriver): Promise<CoursePageType> {
+  const coursePageType = await browser.wait(async (): Promise<CoursePageType | false> => {
+    const projectContainers: WebElement[] = await browser.findElements(By.css('.nupm_right.f_r'));
+    if (projectContainers.length > 0) {
+      return 'project';
+    }
+
+    const otherContainers: WebElement[] = await browser.findElements(By.css('.nupm_rightAll'));
+    if (otherContainers.length > 0) {
+      return 'other';
+    }
+
+    return false;
+  }, 1000 * 15);
+
+  if (!coursePageType) {
+    throw new Error('无法识别课程页面类型');
+  }
+
+  return coursePageType;
+}
+
 async function startLearn(user: User) {
   // 进入用户中心
   const usercenter = '/usercenter/index';
@@ -35,8 +59,10 @@ async function startLearn(user: User) {
 
       console.log(`\n学习【${courseTitle}】课程\n`);
 
-      if (courseTitle.search('继续医学教育（远程）项目') >= 0) {
-        // 继续课程
+      const coursePageType = await getCoursePageType(browser);
+
+      if (coursePageType === 'project') {
+        // 项目列表课程
         await learnContinueCourse(browser, user);
       } else {
         // 其他课程
@@ -46,11 +72,14 @@ async function startLearn(user: User) {
       console.log(`\n完成【${courseTitle}】课程\n`);
     }
   } catch (error) {
-    await browser.close();
+    await browser.quit();
 
     if (error === 'other course') {
       throw 'other course';
     }
+
+    console.error('学习过程中出现错误', error);
+    throw error;
   }
 }
 

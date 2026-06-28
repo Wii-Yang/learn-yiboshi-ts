@@ -7,10 +7,12 @@ import { isLogin } from './system/login.ts';
 import loginUser from './system/login.ts';
 import { editUser } from './user/management.ts';
 import startLearn from './learn/index.ts';
+import { initLogger } from './system/logger.ts';
 
 // 主函数
 async function main() {
   try {
+    initLogger();
     // 初始化系统
     await initSystem();
 

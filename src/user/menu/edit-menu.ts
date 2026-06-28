@@ -3,6 +3,7 @@ import User from '../index.ts';
 import { readlineSync } from '../../utils.ts';
 import loginUser from '../../system/login.ts';
 import { editUser } from '../management.ts';
+import { logInteractive } from '../../system/logger.ts';
 
 class EditMenu extends Menu {
   constructor() {
@@ -10,11 +11,11 @@ class EditMenu extends Menu {
   }
 
   public async fun() {
-    console.log('\n【编辑用户】');
+    logInteractive('\n【编辑用户】');
 
     const user: User = await this.selectUser('请选择要编辑的用户：');
 
-    console.log(`选中【${user.getName()}】账号：【${user.getUsername()}】密码：【${user.getPassword()}】`);
+    logInteractive(`选中【${user.getName()}】账号：【${user.getUsername()}】密码：【${user.getPassword()}】`);
 
     const username: string = await readlineSync('请输入新的账号(不修改直接回车)：');
     if (username.trim()) {
@@ -34,7 +35,7 @@ class EditMenu extends Menu {
     // 更新数据
     editUser(newUser);
 
-    console.log('用户编辑成功\n');
+    logInteractive('用户编辑成功\n');
   }
 }
 

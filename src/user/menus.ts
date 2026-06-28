@@ -6,6 +6,8 @@ import { readlineSync } from '../utils.ts';
 import SelectMenu from './menu/select-menu.ts';
 import RemoveMenu from './menu/remove-menu.ts';
 import EditMenu from './menu/edit-menu.ts';
+import { getUserList } from './management.ts';
+import { logInteractive } from '../system/logger.ts';
 
 // 新增用户
 const addUserMenu = new AddUserMenu();
@@ -20,6 +22,14 @@ const editUserMenu = new EditMenu();
 const selectUserMenu = new SelectMenu();
 
 async function getUserByMenus(): Promise<User> {
+  if (process.env.YIBOSHI_AUTO_FIRST_USER === '1') {
+    const user = getUserList()[0];
+    if (user) {
+      logInteractive(`自动选择【${user.getName()}】账号\n`);
+      return user;
+    }
+  }
+
   let user: User | undefined;
   do {
     // 获取菜单
@@ -31,7 +41,7 @@ async function getUserByMenus(): Promise<User> {
     // 校验输入
     const index: number = Number(menuIndex) - 1;
     if (isNaN(index) || index >= menus.length) {
-      console.log('输入错误，请重新选择！');
+      logInteractive('输入错误，请重新选择！');
     } else {
       const menu = menus[index];
       if (menu) {
@@ -47,9 +57,9 @@ async function getUserByMenus(): Promise<User> {
 }
 
 function printMenus(menus: Menu[]): void {
-  console.log('【功能菜单】');
+  logInteractive('【功能菜单】');
   menus.forEach((menu, index) => {
-    console.log(`[${index + 1}] ${menu.getName()}`);
+    logInteractive(`[${index + 1}] ${menu.getName()}`);
   });
 }
 
