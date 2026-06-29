@@ -15,6 +15,13 @@ let lastProgressRecoveryTime = 0;
 
 const VIDEO_PAGE_LOAD_TIMEOUT_MS = 1000 * 60 * 2;
 
+interface PlaybackState {
+  currentTime: number;
+  duration: number;
+  paused: boolean;
+  ended: boolean;
+}
+
 /**
  * 播放视频
  * @param button
@@ -29,51 +36,25 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
 
   let lastPlayError: unknown;
   for (let attempt = 1; attempt <= 2; attempt++) {
-    // 打开视频播放页
     const browser: WebDriver = await createBrowserByURL(url, { headless: true, muteAudio: true }, user);
 
     try {
       console.log('等待视频加载中......');
-      await browser.wait(until.elementLocated(By.css('.video_main')), VIDEO_PAGE_LOAD_TIMEOUT_MS);
-      await browser.wait(async () => {
-        const video_main: WebElement = await browser.findElement(By.css('.video_main'));
-        const loading_mask: WebElement = await video_main.findElement(By.css('.el-loading-mask'));
-        const display: string = await loading_mask.getCssValue('display');
-
-        if (display === 'none') {
-          const vm_list: WebElement[] = await video_main.findElements(By.css('.vm .vm_list .vml_main ul li'));
-          return vm_list.length > 0;
-        }
-        return false;
-      }, VIDEO_PAGE_LOAD_TIMEOUT_MS);
-
-      // await changeVideoClarity(browser);
-
-      await browser.findElement(By.css('.video_main .vm_video .plyr'));
+      await waitVideoPageLoaded(browser);
       await muteVideo(browser);
-
-      // 播放视频
       await waitInitialPlayback(browser);
+      resetPlaybackState();
 
-      // 等待视频播放结束
-      lastActiveVideoName = '';
-      lastPlaybackLogTime = 0;
-      lastVideoCurrentTime = 0;
-      lastVideoCurrentTimeCheck = Date.now();
-      lastStallResumeTime = 0;
-      lastProgressChangeTime = Date.now();
-      lastProgressCompleted = 0;
-      lastProgressRecoveryTime = 0;
       await browser.wait(async () => {
         try {
           await closeDialog(browser);
           await browser.sleep(1000);
 
-          // 暂停后继续播放
-          const plyr: WebElement[] = await browser.findElements(By.className('plyr--paused'));
-          if (plyr.length === 1) {
+          const pausedPlayers: WebElement[] = await browser.findElements(By.className('plyr--paused'));
+          if (pausedPlayers.length === 1) {
             await playCurrentVideo(browser);
           }
+
           await logActiveVideo(browser);
           await logPlaybackHeartbeat(browser);
           return await isCompleted(browser);
@@ -84,6 +65,7 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
           throw waitError;
         }
       });
+
       console.log(`完成【${courseName}】课程视频`);
       return;
     } catch (playError) {
@@ -106,25 +88,44 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
  * @param browser
  */
 export async function changeVideoClarity(browser: WebDriver): Promise<void> {
-  // 清晰度
   const vmQingxi: WebElement = await browser.findElement(By.className('vm_qingxi'));
-  // 开关
   const elSwitch: WebElement = await vmQingxi.findElement(By.className('el-switch'));
-  // 判断是否是高清
   const switchClassName: string = await elSwitch.getAttribute('class');
   if (switchClassName.search('is-checked') >= 0) {
     await elSwitch.click();
   }
 }
 
-/**
- * 是否完成
- * @param browser
- */
+async function waitVideoPageLoaded(browser: WebDriver): Promise<void> {
+  await browser.wait(until.elementLocated(By.css('.video_main')), VIDEO_PAGE_LOAD_TIMEOUT_MS);
+  await browser.wait(async () => {
+    const videoMain: WebElement = await browser.findElement(By.css('.video_main'));
+    const loadingMasks: WebElement[] = await videoMain.findElements(By.css('.el-loading-mask'));
+    if (loadingMasks.length > 0 && (await loadingMasks[0]!.getCssValue('display')) !== 'none') {
+      return false;
+    }
+
+    const videoList: WebElement[] = await videoMain.findElements(By.css('.vm .vm_list .vml_main ul li'));
+    const players: WebElement[] = await videoMain.findElements(By.css('.vm_video .plyr'));
+    return videoList.length > 0 && players.length > 0;
+  }, VIDEO_PAGE_LOAD_TIMEOUT_MS);
+}
+
+function resetPlaybackState(): void {
+  lastActiveVideoName = '';
+  lastPlaybackLogTime = 0;
+  lastVideoCurrentTime = 0;
+  lastVideoCurrentTimeCheck = Date.now();
+  lastStallResumeTime = 0;
+  lastProgressChangeTime = Date.now();
+  lastProgressCompleted = 0;
+  lastProgressRecoveryTime = 0;
+}
+
 async function isCompleted(browser: WebDriver): Promise<boolean> {
-  const video_dabiao: WebElement = await browser.findElement(By.css('.video_main .vm .vm_star .video_dabiao'));
-  const video_dabiao_text: string = await video_dabiao.getText();
-  const value: string[] | null = video_dabiao_text.match(/[0-9]{1,3}/g) as string[] | null;
+  const videoDabiao: WebElement = await browser.findElement(By.css('.video_main .vm .vm_star .video_dabiao'));
+  const videoDabiaoText: string = await videoDabiao.getText();
+  const value: string[] | null = videoDabiaoText.match(/[0-9]{1,3}/g) as string[] | null;
   if (value && value.length === 2) {
     const progressList: number[] = value.map((item: string) => Number(item));
     const completedProgress = progressList[1]!;
@@ -134,6 +135,9 @@ async function isCompleted(browser: WebDriver): Promise<boolean> {
     }
 
     if (progressList[0]! <= progressList[1]!) {
+      if (await playNextVideoIfExists(browser)) {
+        return false;
+      }
       await browser.sleep(2000);
       return true;
     }
@@ -143,18 +147,7 @@ async function isCompleted(browser: WebDriver): Promise<boolean> {
 
 async function logActiveVideo(browser: WebDriver): Promise<void> {
   try {
-    const videoItems: WebElement[] = await browser.findElements(By.css('.vm .vm_list .vml_main ul li'));
-    let activeVideo: WebElement | undefined;
-
-    for (let i = 0; i < videoItems.length; i++) {
-      const videoItem = videoItems[i]!;
-      const className: string = await videoItem.getAttribute('class');
-      if (/(^|\s)(active|on|current|selected|is-active|vmlm_ing)(\s|$)/.test(className)) {
-        activeVideo = videoItem;
-        break;
-      }
-    }
-
+    const activeVideo = await getActiveVideo(browser);
     if (!activeVideo) {
       return;
     }
@@ -171,13 +164,6 @@ async function logActiveVideo(browser: WebDriver): Promise<void> {
   }
 }
 
-function formatActiveVideoName(videoText: string): string {
-  return videoText
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/^\d{1,2}:\d{2}(?::\d{2})?\s*/, '');
-}
-
 async function logPlaybackHeartbeat(browser: WebDriver): Promise<void> {
   const playbackState = await getPlaybackState(browser);
   if (!playbackState) {
@@ -191,9 +177,17 @@ async function logPlaybackHeartbeat(browser: WebDriver): Promise<void> {
     lastVideoCurrentTimeCheck = now;
   }
 
+  if (isVideoEnded(playbackState) && (await playNextVideoIfExists(browser))) {
+    return;
+  }
+
   if (!playbackState.ended && !isAdvancing && now - lastVideoCurrentTimeCheck > 1000 * 120) {
     if (now - lastStallResumeTime > 1000 * 60) {
-      await recoverVideo(browser, `视频时间未推进：${formatSeconds(playbackState.currentTime)}/${formatSeconds(playbackState.duration)}`);
+      await recoverVideo(
+        browser,
+        `视频时间未推进：${formatSeconds(playbackState.currentTime)}/${formatSeconds(playbackState.duration)}`,
+        true,
+      );
       lastStallResumeTime = now;
     }
   }
@@ -217,21 +211,68 @@ async function logPlaybackHeartbeat(browser: WebDriver): Promise<void> {
   }
 
   const progressText = await getProgressText(browser);
-  logLive(
-    `视频播放中：${formatSeconds(playbackState.currentTime)}/${formatSeconds(playbackState.duration)}，${progressText}`,
-  );
+  logLive(`视频播放中：${formatSeconds(playbackState.currentTime)}/${formatSeconds(playbackState.duration)}，${progressText}`);
   lastPlaybackLogTime = now;
 }
 
-async function getPlaybackState(browser: WebDriver): Promise<
-  | {
-      currentTime: number;
-      duration: number;
-      paused: boolean;
-      ended: boolean;
+async function playNextVideoIfExists(browser: WebDriver): Promise<boolean> {
+  const videoItems: WebElement[] = await browser.findElements(By.css('.vm .vm_list .vml_main ul li'));
+  const activeIndex = await getActiveVideoIndex(videoItems);
+
+  if (activeIndex < 0 || activeIndex >= videoItems.length - 1) {
+    return false;
+  }
+
+  const nextVideo = videoItems[activeIndex + 1]!;
+  const nextVideoName = formatActiveVideoName(await nextVideo.getText());
+  logLive(`切换到下一个视频：${nextVideoName}`);
+
+  const clickTargets: WebElement[] = await nextVideo.findElements(By.css('a,button,input'));
+  await safeClick(browser, clickTargets[0] || nextVideo);
+
+  resetPlaybackState();
+  await browser.wait(async () => {
+    await closeDialog(browser);
+    const latestItems: WebElement[] = await browser.findElements(By.css('.vm .vm_list .vml_main ul li'));
+    return (await getActiveVideoIndex(latestItems)) === activeIndex + 1;
+  }, 1000 * 15);
+  await waitInitialPlayback(browser);
+  return true;
+}
+
+async function getActiveVideo(browser: WebDriver): Promise<WebElement | undefined> {
+  const videoItems: WebElement[] = await browser.findElements(By.css('.vm .vm_list .vml_main ul li'));
+  const activeIndex = await getActiveVideoIndex(videoItems);
+  if (activeIndex < 0) {
+    return undefined;
+  }
+
+  return videoItems[activeIndex];
+}
+
+async function getActiveVideoIndex(videoItems: WebElement[]): Promise<number> {
+  for (let i = 0; i < videoItems.length; i++) {
+    const className: string = await videoItems[i]!.getAttribute('class');
+    if (/(^|\s)(active|on|current|selected|is-active|vmlm_ing)(\s|$)/.test(className)) {
+      return i;
     }
-  | undefined
-> {
+  }
+
+  return -1;
+}
+
+function formatActiveVideoName(videoText: string): string {
+  return videoText
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^\d{1,2}:\d{2}(?::\d{2})?\s*/, '');
+}
+
+function isVideoEnded(playbackState: PlaybackState): boolean {
+  return playbackState.ended;
+}
+
+async function getPlaybackState(browser: WebDriver): Promise<PlaybackState | undefined> {
   return await browser.executeScript(`
     const video = document.querySelector('video');
     if (!video) return undefined;
@@ -278,7 +319,6 @@ function getProgressStaleThresholdMs(duration: number): number {
     return minThresholdMs;
   }
 
-  // The site reports integer percentages, so long videos can legitimately take a while before the next percent appears.
   const fourPercentDurationMs = duration * 0.04 * 1000;
   return Math.min(maxThresholdMs, Math.max(minThresholdMs, fourPercentDurationMs));
 }
@@ -372,36 +412,26 @@ async function assertUiPlaybackStarted(browser: WebDriver): Promise<void> {
   }
 }
 
-async function recoverVideo(browser: WebDriver, reason: string): Promise<void> {
+async function recoverVideo(browser: WebDriver, reason: string, refreshFirst = false): Promise<void> {
   logLive(`播放恢复：${reason}`);
   await logVideoDiagnostics(browser, reason);
 
-  try {
-    await playCurrentVideo(browser, true);
-    return;
-  } catch (uiError) {
-    console.error('通过播放器 UI 恢复失败，刷新播放页后重试', uiError);
+  if (!refreshFirst) {
+    try {
+      await playCurrentVideo(browser, true);
+      return;
+    } catch (uiError) {
+      console.error('通过播放器 UI 恢复失败，刷新播放页后重试', uiError);
+    }
   }
 
   logLive('播放恢复：刷新播放页并重新点击播放器 UI');
   await browser.navigate().refresh();
-  await browser.wait(until.elementLocated(By.css('.video_main')), VIDEO_PAGE_LOAD_TIMEOUT_MS);
-  await browser.wait(async () => {
-    const videoMain: WebElement = await browser.findElement(By.css('.video_main'));
-    const loadingMasks: WebElement[] = await videoMain.findElements(By.css('.el-loading-mask'));
-    if (loadingMasks.length > 0 && (await loadingMasks[0]!.getCssValue('display')) !== 'none') {
-      return false;
-    }
-    const videoList: WebElement[] = await videoMain.findElements(By.css('.vm .vm_list .vml_main ul li'));
-    return videoList.length > 0;
-  }, VIDEO_PAGE_LOAD_TIMEOUT_MS);
-
+  await waitVideoPageLoaded(browser);
   await closeDialog(browser);
   await muteVideo(browser);
   await playCurrentVideo(browser);
-  lastPlaybackLogTime = 0;
-  lastVideoCurrentTime = 0;
-  lastVideoCurrentTimeCheck = Date.now();
+  resetPlaybackState();
 }
 
 async function logVideoDiagnostics(browser: WebDriver, reason: string): Promise<void> {
@@ -438,10 +468,6 @@ async function logVideoDiagnostics(browser: WebDriver, reason: string): Promise<
   console.error(`视频播放诊断：${reason}`, diagnostics);
 }
 
-/**
- * 关闭对话框
- * @param browser
- */
 async function closeDialog(browser: WebDriver): Promise<void> {
   const messageBoxes: WebElement[] = await browser.findElements(By.className('el-message-box__wrapper'));
   for (let i: number = 0; i < messageBoxes.length; i++) {
@@ -463,22 +489,26 @@ async function closeDialog(browser: WebDriver): Promise<void> {
   }
 
   const dialogs: WebElement[] = await browser.findElements(By.className('el-dialog__wrapper'));
-
   for (let i = 0; i < dialogs.length; i++) {
     const style: string = await dialogs[i]!.getAttribute('style');
-    if (style.search('display: none') < 0) {
-      const dialog = await dialogs[i]!.findElement(By.className('el-dialog'));
-      const ariaLabel: string = await dialog.getAttribute('aria-label');
-      switch (ariaLabel) {
-        case '温馨提示': {
-          const button: WebElement = await dialog.findElement(By.className('el-button'));
-          await safeClick(browser, button);
-          break;
+    if (style.search('display: none') >= 0) {
+      continue;
+    }
+
+    const dialog = await dialogs[i]!.findElement(By.className('el-dialog'));
+    const ariaLabel: string = await dialog.getAttribute('aria-label');
+    switch (ariaLabel) {
+      case '温馨提示':
+      case '提示': {
+        const buttons: WebElement[] = await dialog.findElements(By.css('button'));
+        if (buttons.length > 0) {
+          await safeClick(browser, buttons[0]!);
         }
-        default:
-          console.error('视频播放页出现未处理对话框');
-          throw 'exit';
+        break;
       }
+      default:
+        console.error('视频播放页出现未处理对话框');
+        throw 'exit';
     }
   }
 
