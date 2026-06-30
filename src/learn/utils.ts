@@ -33,7 +33,7 @@ export async function getRedirectURLByButton(button: WebElement): Promise<string
       return currentURL !== beforeURL;
     }, 1000 * 20);
   } catch (error) {
-    await logRedirectDebug(browser, beforeAllWindowHandles.length);
+    await logRedirectDebug(browser, clickTarget, beforeAllWindowHandles.length);
     throw error;
   }
 
@@ -70,10 +70,23 @@ export async function getRedirectURLByButton(button: WebElement): Promise<string
   return redirectURL;
 }
 
-async function logRedirectDebug(browser: WebDriver, beforeWindowCount: number): Promise<void> {
+async function logRedirectDebug(browser: WebDriver, clickTarget: WebElement, beforeWindowCount: number): Promise<void> {
   const currentURL: string = await browser.getCurrentUrl();
   const windowHandles: string[] = await browser.getAllWindowHandles();
   console.error(`跳转失败：窗口数量 ${beforeWindowCount} -> ${windowHandles.length}，当前地址：${currentURL}`);
+
+  try {
+    console.error('跳转目标元素：', {
+      text: await clickTarget.getText(),
+      href: await clickTarget.getAttribute('href'),
+      className: await clickTarget.getAttribute('class'),
+      disabled: await clickTarget.getAttribute('disabled'),
+      displayed: await clickTarget.isDisplayed(),
+      enabled: await clickTarget.isEnabled(),
+    });
+  } catch (targetError) {
+    console.error('读取跳转目标元素信息失败', targetError);
+  }
 
   const messageBoxes: WebElement[] = await browser.findElements(By.className('el-message-box__wrapper'));
   for (let i = 0; i < messageBoxes.length; i++) {
