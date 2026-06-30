@@ -1,5 +1,6 @@
 import Menu from './index.ts';
 import type User from '../index.ts';
+import { logInteractive } from '../../system/logger.ts';
 
 class SelectMenu extends Menu {
   constructor() {
@@ -7,10 +8,10 @@ class SelectMenu extends Menu {
   }
 
   public async fun(): Promise<User> {
-    console.log('\n【选择用户】');
+    logInteractive('\n【选择用户】');
 
     const user: User = await this.selectUser('请输入用户序号：');
-    console.log(`选中【${user.getName()}】账号\n`);
+    logInteractive(`选中【${user.getName()}】账号\n`);
 
     return user;
   }

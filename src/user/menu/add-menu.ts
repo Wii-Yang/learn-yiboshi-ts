@@ -3,6 +3,7 @@ import { readlineSync } from '../../utils.ts';
 import User from '../index.ts';
 import loginUser from '../../system/login.ts';
 import { addUser } from '../management.ts';
+import { logInteractive } from '../../system/logger.ts';
 
 class AddUserMenu extends Menu {
   constructor() {
@@ -10,7 +11,7 @@ class AddUserMenu extends Menu {
   }
 
   public async fun(): Promise<void> {
-    console.log('\n【添加用户】');
+    logInteractive('\n【添加用户】');
 
     // 输入账号密码
     const username = await readlineSync('请输入账号：');
@@ -24,7 +25,7 @@ class AddUserMenu extends Menu {
     // 添加数据
     addUser(user);
 
-    console.log('用户添加成功\n');
+    logInteractive('用户添加成功\n');
   }
 }
 

@@ -11,7 +11,7 @@ import { closeDialog } from './utils.ts';
  */
 async function awaitProjectListLoading(browser: WebDriver): Promise<boolean> {
   return browser.wait(async (): Promise<boolean> => {
-    const nupm_right: WebElement = await browser.findElement(By.className('nupm_right f_r'));
+    const nupm_right: WebElement = await browser.findElement(By.css('.nupm_right.f_r'));
 
     const el_loading_mask: WebElement = await nupm_right.findElement(By.className('el-loading-mask'));
     const el_loading_mask__style: string = await el_loading_mask.getCssValue('display');
@@ -41,7 +41,25 @@ async function getProjectList(nupm_right: WebElement): Promise<WebElement[]> {
   await awaitProjectListLoading(nupmr_main.getDriver());
 
   const nupmrm_content: WebElement = await nupm_right.findElement(By.className('nupmrm_content'));
-  return await nupmrm_content.findElements(By.className('npc_box'));
+  const projectList: WebElement[] = await nupmrm_content.findElements(By.className('npc_box'));
+  const myProjectList: WebElement[] = [];
+
+  for (let i = 0; i < projectList.length; i++) {
+    const project = projectList[i]!;
+    const projectText: string = await project.getText();
+    if (projectText.search('添加到我的项目') >= 0) {
+      continue;
+    }
+    myProjectList.push(project);
+  }
+
+  if (projectList.length > 0 && myProjectList.length === 0) {
+    console.log('当前列表不是“我的项目”，跳过外部项目列表');
+  } else {
+    console.log(`“我的项目”待学习项目数：${myProjectList.length}`);
+  }
+
+  return myProjectList;
 }
 
 /**
@@ -53,7 +71,7 @@ export async function learnContinueCourse(browser: WebDriver, user: User): Promi
   try {
     await awaitProjectListLoading(browser);
 
-    const nupm_right: WebElement = await browser.findElement(By.className('nupm_right f_r'));
+    const nupm_right: WebElement = await browser.findElement(By.css('.nupm_right.f_r'));
 
     // 切换到“我的项目”
     const nupmr_title__list: WebElement[] = await nupm_right.findElements(By.css('.nupmr_title a'));
@@ -63,6 +81,7 @@ export async function learnContinueCourse(browser: WebDriver, user: User): Promi
       if (nupmr_title__text === '我的项目') {
         await browser.executeScript('arguments[0].scrollIntoView(false);', nupmr_title);
         await nupmr_title.click();
+        console.log('已切换到“我的项目”');
         break;
       }
     }
@@ -93,8 +112,9 @@ export async function learnContinueCourse(browser: WebDriver, user: User): Promi
         }
       }
     } while (projectList.length > 0);
-  } catch {
-    await learnContinueCourse(browser, user);
+  } catch (error) {
+    console.error('继续课程学习过程中出现错误', error);
+    throw error;
   }
 }
 
@@ -218,7 +238,8 @@ export async function learnOtherCourse(browser: WebDriver, user: User): Promise<
         }
       }
     } while (!isEnd);
-  } catch {
-    await learnOtherCourse(browser, user);
+  } catch (error) {
+    console.error('其他课程学习过程中出现错误', error);
+    throw error;
   }
 }
