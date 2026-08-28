@@ -16,11 +16,16 @@ interface BrowserOptions {
 export async function createBrowser(options: BrowserOptions = { headless: true }): Promise<WebDriver> {
   // 获取 chromedriver
   const service: ServiceBuilder = new ServiceBuilder(Config.ChromedriverPath);
+  // 屏蔽 chromedriver 进程的输出，避免把 Chrome 后台日志(如 GCM)刷进终端
+  service.setStdio('ignore');
 
   // 浏览器配置
   const chromeOptions: Options = new Options();
   // 减少在 win 运行时的日志打印
   chromeOptions.addArguments('--log-level=3');
+  chromeOptions.addArguments('--disable-background-networking');
+  chromeOptions.addArguments('--disable-sync');
+  chromeOptions.addArguments('--disable-component-update');
   chromeOptions.addArguments('--autoplay-policy=no-user-gesture-required');
   chromeOptions.addArguments('--disable-background-timer-throttling');
   chromeOptions.addArguments('--disable-backgrounding-occluded-windows');

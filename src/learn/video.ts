@@ -13,7 +13,14 @@ let lastProgressChangeTime = 0;
 let lastProgressCompleted = 0;
 let lastProgressRecoveryTime = 0;
 
+// 达标进度采样点，用于估算剩余时间
+const progressSamples: Array<{ time: number; value: number }> = [];
+
 const VIDEO_PAGE_LOAD_TIMEOUT_MS = 1000 * 60 * 2;
+// 视频时间未推进的检测阈值：玩家冻结后快速触发恢复，减少整夜空转
+const STALL_DETECT_THRESHOLD_MS = 1000 * 60;
+// 两次播放恢复之间的最小间隔，避免同一段视频被频繁刷新
+const STALL_RESUME_COOLDOWN_MS = 1000 * 30;
 
 interface PlaybackState {
   currentTime: number;
@@ -44,6 +51,7 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
       await muteVideo(browser);
       await waitInitialPlayback(browser);
       resetPlaybackState();
+      progressSamples.length = 0;
 
       await browser.wait(async () => {
         try {
@@ -132,6 +140,10 @@ async function isCompleted(browser: WebDriver): Promise<boolean> {
     if (completedProgress !== lastProgressCompleted) {
       lastProgressCompleted = completedProgress;
       lastProgressChangeTime = Date.now();
+      progressSamples.push({ time: lastProgressChangeTime, value: completedProgress });
+      if (progressSamples.length > 12) {
+        progressSamples.shift();
+      }
     }
 
     if (progressList[0]! <= progressList[1]!) {
@@ -181,12 +193,11 @@ async function logPlaybackHeartbeat(browser: WebDriver): Promise<void> {
     return;
   }
 
-  if (!playbackState.ended && !isAdvancing && now - lastVideoCurrentTimeCheck > 1000 * 120) {
-    if (now - lastStallResumeTime > 1000 * 60) {
+  if (!playbackState.ended && !isAdvancing && now - lastVideoCurrentTimeCheck > STALL_DETECT_THRESHOLD_MS) {
+    if (now - lastStallResumeTime > STALL_RESUME_COOLDOWN_MS) {
       await recoverVideo(
         browser,
         `视频时间未推进：${formatSeconds(playbackState.currentTime)}/${formatSeconds(playbackState.duration)}`,
-        true,
       );
       lastStallResumeTime = now;
     }
@@ -210,8 +221,17 @@ async function logPlaybackHeartbeat(browser: WebDriver): Promise<void> {
     return;
   }
 
-  const progressText = await getProgressText(browser);
-  logLive(`视频播放中：${formatSeconds(playbackState.currentTime)}/${formatSeconds(playbackState.duration)}，${progressText}`);
+  const currentProgress = await getCompletedProgress(browser);
+  const progressBar = currentProgress !== null ? buildProgressBar(currentProgress) : '';
+  let etaSeconds: number | null = currentProgress !== null ? estimateRemainingSeconds(currentProgress) : null;
+  if (etaSeconds === null && playbackState.duration > playbackState.currentTime) {
+    etaSeconds = playbackState.duration - playbackState.currentTime;
+  }
+  const etaText = etaSeconds !== null ? formatEta(etaSeconds) : '估算中...';
+  const progressInfo = currentProgress !== null ? `${progressBar} ${currentProgress}/100` : '达标进度未知';
+  logLive(
+    `视频播放中：${formatSeconds(playbackState.currentTime)}/${formatSeconds(playbackState.duration)}  |  学习进度 ${progressInfo}  |  预计剩余 ${etaText}`,
+  );
   lastPlaybackLogTime = now;
 }
 
@@ -285,19 +305,60 @@ async function getPlaybackState(browser: WebDriver): Promise<PlaybackState | und
   `);
 }
 
-async function getProgressText(browser: WebDriver): Promise<string> {
-  const progressElements: WebElement[] = await browser.findElements(By.css('.video_main .vm .vm_star .video_dabiao'));
-  if (progressElements.length <= 0) {
-    return '达标进度未知';
+async function getCompletedProgress(browser: WebDriver): Promise<number | null> {
+  try {
+    const progressElement = await browser.findElement(By.css('.video_main .vm .vm_star .video_dabiao'));
+    const progressText = await progressElement.getText();
+    const value = progressText.match(/[0-9]{1,3}/g) as string[] | null;
+    if (value && value.length === 2) {
+      return Number(value[1]);
+    }
+  } catch {
+    return null;
   }
+  return null;
+}
 
-  const progressText: string = await progressElements[0]!.getText();
-  const value: string[] | null = progressText.match(/[0-9]{1,3}/g) as string[] | null;
-  if (value && value.length === 2) {
-    return `达标进度：${value[1]}/${value[0]}`;
+function buildProgressBar(progress: number, width = 12): string {
+  const clamped = Math.max(0, Math.min(100, progress));
+  const filled = Math.round((clamped / 100) * width);
+  return '█'.repeat(filled) + '░'.repeat(width - filled);
+}
+
+function estimateRemainingSeconds(currentProgress: number): number | null {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const recent = progressSamples.filter((sample) => now - sample.time <= windowMs);
+  if (recent.length < 2) {
+    return null;
   }
+  const first = recent[0]!;
+  const last = recent[recent.length - 1]!;
+  const dtSeconds = (last.time - first.time) / 1000;
+  const dv = last.value - first.value;
+  if (dtSeconds <= 0 || dv <= 0) {
+    return null;
+  }
+  const ratePerSecond = dv / dtSeconds;
+  const remaining = 100 - currentProgress;
+  return remaining > 0 ? remaining / ratePerSecond : 0;
+}
 
-  return progressText.replace(/\s+/g, ' ').trim();
+function formatEta(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return '估算中...';
+  }
+  const total = Math.round(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (hours > 0) {
+    return `${hours} 小时 ${minutes} 分`;
+  }
+  if (minutes > 0) {
+    return `${minutes} 分 ${secs} 秒`;
+  }
+  return `${secs} 秒`;
 }
 
 function formatSeconds(seconds: number): string {
@@ -412,14 +473,49 @@ async function assertUiPlaybackStarted(browser: WebDriver): Promise<void> {
   }
 }
 
+async function forceResumeVideo(browser: WebDriver): Promise<boolean> {
+  // 针对“元素显示播放中(paused=false)但 currentTime 冻结”的状态：先 force play，
+  // 再做一次轻微向前 seek，触发解码器重新推进；若几秒内仍未推进则返回 false，
+  // 由 recoverVideo 回退到整页刷新。
+  const before = (await browser.executeScript(`
+    const video = document.querySelector('video');
+    if (!video) return null;
+    video.muted = true;
+    video.volume = 0;
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => {});
+    }
+    try {
+      video.currentTime = (video.currentTime || 0) + 0.5;
+    } catch (e) {}
+    return video.currentTime || 0;
+  `)) as number | null;
+
+  if (before === null || before === undefined) {
+    return false;
+  }
+
+  try {
+    await browser.wait(async () => {
+      const playbackState = await getPlaybackState(browser);
+      return !!playbackState && playbackState.currentTime > before + 1;
+    }, 1000 * 6);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function recoverVideo(browser: WebDriver, reason: string, refreshFirst = false): Promise<void> {
   logLive(`播放恢复：${reason}`);
   await logVideoDiagnostics(browser, reason);
 
   if (!refreshFirst) {
     try {
-      await playCurrentVideo(browser, true);
-      return;
+      if (await forceResumeVideo(browser)) {
+        return;
+      }
     } catch (uiError) {
       console.error('通过播放器 UI 恢复失败，刷新播放页后重试', uiError);
     }
@@ -577,9 +673,7 @@ function isClickFallbackError(clickError: unknown): boolean {
 async function waitDialogHidden(browser: WebDriver): Promise<void> {
   try {
     await browser.wait(async () => {
-      const overlays: WebElement[] = await browser.findElements(
-        By.css('.el-dialog__wrapper,.el-message-box__wrapper'),
-      );
+      const overlays: WebElement[] = await browser.findElements(By.css('.el-dialog__wrapper,.el-message-box__wrapper'));
 
       for (let i = 0; i < overlays.length; i++) {
         const display: string = await overlays[i]!.getCssValue('display');
