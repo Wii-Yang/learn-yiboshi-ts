@@ -29,6 +29,13 @@ interface PlaybackState {
   ended: boolean;
 }
 
+export class DailyStudyLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DailyStudyLimitError';
+  }
+}
+
 /**
  * 播放视频
  * @param button
@@ -39,7 +46,21 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
   console.log(`开始播放【${courseName}】课程视频`);
 
   console.log('获取视频网址中......');
-  const url: string = await getRedirectURLByButton(button);
+  let url: string;
+  try {
+    url = await getVideoURLFromProjectPage(button, courseName);
+    console.log('已从项目课程数据获取视频播放地址');
+  } catch (projectDataError) {
+    console.log('项目课程数据暂不可用，改用页面视频入口获取播放地址');
+    try {
+      url = await getRedirectURLByButton(button);
+    } catch (redirectError) {
+      const projectDataMessage =
+        projectDataError instanceof Error ? projectDataError.message : String(projectDataError);
+      const redirectMessage = redirectError instanceof Error ? redirectError.message : String(redirectError);
+      throw new Error(`获取视频播放地址失败：项目数据：${projectDataMessage}；页面跳转：${redirectMessage}`);
+    }
+  }
 
   let lastPlayError: unknown;
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -60,7 +81,16 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
 
           const pausedPlayers: WebElement[] = await browser.findElements(By.className('plyr--paused'));
           if (pausedPlayers.length === 1) {
-            await playCurrentVideo(browser);
+            try {
+              await playCurrentVideo(browser);
+            } catch (resumeError) {
+              console.error('播放器暂停且点击恢复失败，尝试原生播放恢复', resumeError);
+              if (!(await forceResumeVideo(browser))) {
+                await logVideoDiagnostics(browser, '播放器暂停且原生播放恢复失败');
+                throw new Error('播放器暂停且恢复失败，停止本次播放以避免刷新后回退学习进度');
+              }
+              return false;
+            }
           }
 
           await logActiveVideo(browser);
@@ -77,6 +107,9 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
       console.log(`完成【${courseName}】课程视频`);
       return;
     } catch (playError) {
+      if (playError instanceof DailyStudyLimitError) {
+        throw playError;
+      }
       lastPlayError = playError;
       console.error(`\n视频播放过程中出现错误（第 ${attempt} 次）\n`, playError);
       if (attempt < 2) {
@@ -89,6 +122,64 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
 
   console.error('视频播放重试后仍失败', lastPlayError);
   throw 'play video';
+}
+
+async function getVideoURLFromProjectPage(button: WebElement, courseName: string): Promise<string> {
+  const browser = button.getDriver();
+  const result = await browser.executeScript<{ url: string } | null>(
+    String.raw`
+      const targetName = arguments[0].replace(/\s+/g, ' ').trim();
+      const componentElement = [...document.querySelectorAll('*')].find((element) => {
+        const vm = element.__vue__;
+        return vm && Object.prototype.hasOwnProperty.call(vm.$data || {}, 'courseList');
+      });
+      const vm = componentElement && componentElement.__vue__;
+      if (!vm || !vm.courseList) return null;
+
+      const seen = new WeakSet();
+      function findCourse(value, depth = 0) {
+        if (!value || typeof value !== 'object' || depth > 8 || seen.has(value)) return null;
+        seen.add(value);
+
+        const name = String(value.name || value.courseName || '').replace(/\s+/g, ' ').trim();
+        if (name === targetName && value.id != null) return value;
+
+        for (const child of Object.values(value)) {
+          const found = findCourse(child, depth + 1);
+          if (found) return found;
+        }
+        return null;
+      }
+
+      const course = findCourse(vm.courseList);
+      if (!course || !vm.userInfo || vm.userInfo.id == null) return null;
+
+      const currentQuery = new URLSearchParams(location.search);
+      const query = new URLSearchParams({
+        uId: String(vm.userInfo.id),
+        tId: String(vm.trainingId || currentQuery.get('trainingId') || ''),
+        pId: String(vm.projectId || currentQuery.get('projectId') || ''),
+        cId: String(course.id),
+        showAds: currentQuery.get('showAds') || '0',
+        enableStudyOnTheSameTime: currentQuery.get('enableStudyOnTheSameTime') || '0',
+        isJiJiao: '1',
+        switchMyProject: currentQuery.get('switchMyProject') || 'true',
+        isPractiseScore: course.practiseScore == null ? 'yes' : 'no',
+        practiseSize: currentQuery.get('practiseSize') || '',
+        uuid: String(vm.faceRecognitionUuid || ''),
+        enableProgressShow: String((vm.currentTraining && vm.currentTraining.enableProgressShow) || 1)
+      });
+
+      return { url: new URL('/videoPlayer?' + query.toString(), location.origin).href };
+    `,
+    courseName,
+  );
+
+  if (!result?.url) {
+    throw new Error(`未在项目课程数据中找到【${courseName}】的视频播放信息`);
+  }
+
+  return result.url;
 }
 
 /**
@@ -474,37 +565,43 @@ async function assertUiPlaybackStarted(browser: WebDriver): Promise<void> {
 }
 
 async function forceResumeVideo(browser: WebDriver): Promise<boolean> {
-  // 针对“元素显示播放中(paused=false)但 currentTime 冻结”的状态：先 force play，
-  // 再做一次轻微向前 seek，触发解码器重新推进；若几秒内仍未推进则返回 false，
-  // 由 recoverVideo 回退到整页刷新。
-  const before = (await browser.executeScript(`
-    const video = document.querySelector('video');
-    if (!video) return null;
-    video.muted = true;
-    video.volume = 0;
-    const playPromise = video.play();
-    if (playPromise && typeof playPromise.catch === 'function') {
-      playPromise.catch(() => {});
+  // 平台会把修改 currentTime 视为拖拽并丢弃后续进度。恢复时只调用 play()，
+  // 并以播放时间自然推进作为成功条件。
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await closeDialog(browser);
+    const before = await getPlaybackState(browser);
+    if (!before) {
+      return false;
     }
+
+    const playError = await browser.executeAsyncScript<string | null>(`
+      const done = arguments[arguments.length - 1];
+      const video = document.querySelector('video');
+      if (!video) {
+        done('video element not found');
+        return;
+      }
+      video.muted = true;
+      video.volume = 0;
+      Promise.resolve(video.play()).then(() => done(null)).catch((error) => done(String(error)));
+    `);
+
+    if (playError) {
+      console.error(`原生 video.play() 失败：${playError}`);
+    }
+
     try {
-      video.currentTime = (video.currentTime || 0) + 0.5;
-    } catch (e) {}
-    return video.currentTime || 0;
-  `)) as number | null;
-
-  if (before === null || before === undefined) {
-    return false;
+      await browser.wait(async () => {
+        const playbackState = await getPlaybackState(browser);
+        return !!playbackState && !playbackState.paused && playbackState.currentTime > before.currentTime + 1;
+      }, 1000 * 8);
+      return true;
+    } catch {
+      // 平台提示框可能在 play() 后异步出现；下一轮先关闭提示框再重试。
+    }
   }
 
-  try {
-    await browser.wait(async () => {
-      const playbackState = await getPlaybackState(browser);
-      return !!playbackState && playbackState.currentTime > before + 1;
-    }, 1000 * 6);
-    return true;
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 async function recoverVideo(browser: WebDriver, reason: string, refreshFirst = false): Promise<void> {
@@ -575,6 +672,9 @@ async function closeDialog(browser: WebDriver): Promise<void> {
 
     const ariaLabel: string = await messageBox.getAttribute('aria-label');
     const messageText: string = await messageBox.getText();
+    if (isDailyStudyLimitMessage(messageText)) {
+      throw new DailyStudyLimitError(normalizeDialogMessage(messageText));
+    }
     if (ariaLabel === '温馨提示' || ariaLabel === '提示' || messageText.search('确认继续学习') >= 0) {
       await clickConfirmButton(browser, messageBox);
       continue;
@@ -593,6 +693,10 @@ async function closeDialog(browser: WebDriver): Promise<void> {
 
     const dialog = await dialogs[i]!.findElement(By.className('el-dialog'));
     const ariaLabel: string = await dialog.getAttribute('aria-label');
+    const dialogText: string = await dialog.getText();
+    if (isDailyStudyLimitMessage(dialogText)) {
+      throw new DailyStudyLimitError(normalizeDialogMessage(dialogText));
+    }
     switch (ariaLabel) {
       case '温馨提示':
       case '提示': {
@@ -609,6 +713,18 @@ async function closeDialog(browser: WebDriver): Promise<void> {
   }
 
   await waitDialogHidden(browser);
+}
+
+function isDailyStudyLimitMessage(message: string): boolean {
+  return message.includes('当日您已累计学习') && message.includes('小时') && message.includes('建议立即休息');
+}
+
+function normalizeDialogMessage(message: string): string {
+  return message
+    .replace(/\s+/g, ' ')
+    .replace(/^温馨提示\s*/, '')
+    .replace(/\s*知道了$/, '')
+    .trim();
 }
 
 async function clickConfirmButton(browser: WebDriver, container: WebElement): Promise<void> {

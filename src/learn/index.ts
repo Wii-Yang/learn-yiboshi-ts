@@ -4,6 +4,7 @@ import { createBrowserByURL } from '../system/browser.ts';
 import Config from '../system/config.ts';
 import { learnContinueCourse, learnOtherCourse } from './course.ts';
 import { closeDialog } from './utils.ts';
+import { DailyStudyLimitError } from './video.ts';
 
 type CoursePageType = 'project' | 'other';
 
@@ -66,6 +67,13 @@ async function startLearn(user: User) {
 
         console.log(`\n完成【${courseTitle}】课程\n`);
       } catch (courseError) {
+        if (courseError instanceof DailyStudyLimitError) {
+          console.error('==================== 自动学习强提醒 ====================');
+          console.error(`平台已停止今日学习：${courseError.message}`);
+          console.error('本次自动学习已结束，不再重试其他课程');
+          console.error('========================================================');
+          return;
+        }
         logSkipCourseGroupError(courseTitle, courseError);
         await browser.get(Config.YiboshiURL + usercenter);
         await browser.wait(until.elementLocated(By.className('nupt_main')));

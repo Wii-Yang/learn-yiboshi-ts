@@ -18,6 +18,7 @@ export async function getRedirectURLByButton(button: WebElement): Promise<string
 
   // 跳转
   await closeDialog(browser);
+  await installPopupURLCapture(browser);
   await browser.executeScript('arguments[0].scrollIntoView(false);', clickTarget);
   console.log(`点击跳转入口：${clickText || '未知按钮'}`);
   await safeClick(browser, clickTarget);
@@ -30,17 +31,26 @@ export async function getRedirectURLByButton(button: WebElement): Promise<string
       }
 
       const currentURL: string = await browser.getCurrentUrl();
-      return currentURL !== beforeURL;
+      const capturedPopupURL = await getCapturedPopupURL(browser);
+      return currentURL !== beforeURL || !!capturedPopupURL;
     }, 1000 * 20);
   } catch (error) {
+    await restorePopupURLCapture(browser);
     await logRedirectDebug(browser, clickTarget, beforeAllWindowHandles.length);
     throw error;
   }
 
   // 跳转后所有窗口
   const afterAllWindowHandles: string[] = await browser.getAllWindowHandles();
+  const capturedPopupURL = await getCapturedPopupURL(browser);
+  await restorePopupURLCapture(browser);
 
   if (afterAllWindowHandles.length === beforeAllWindowHandles.length) {
+    if (capturedPopupURL) {
+      console.log(`已捕获被浏览器拦截的跳转地址：${new URL(capturedPopupURL, beforeURL).pathname}`);
+      return new URL(capturedPopupURL, beforeURL).href;
+    }
+
     const redirectURL: string = await browser.getCurrentUrl();
     await browser.navigate().back();
     await browser.wait(async () => (await browser.getCurrentUrl()) === beforeURL, 1000 * 10);
@@ -68,6 +78,33 @@ export async function getRedirectURLByButton(button: WebElement): Promise<string
   await browser.switchTo().window(currentWindowHandle);
 
   return redirectURL;
+}
+
+async function installPopupURLCapture(browser: WebDriver): Promise<void> {
+  await browser.executeScript(`
+    if (!window.__yiboshiOriginalOpen) {
+      window.__yiboshiOriginalOpen = window.open;
+    }
+    window.__yiboshiCapturedPopupURL = '';
+    window.open = function(url, ...args) {
+      window.__yiboshiCapturedPopupURL = typeof url === 'string' ? url : String(url || '');
+      return window.__yiboshiOriginalOpen.call(window, url, ...args);
+    };
+  `);
+}
+
+async function getCapturedPopupURL(browser: WebDriver): Promise<string> {
+  return await browser.executeScript(`return window.__yiboshiCapturedPopupURL || '';`);
+}
+
+async function restorePopupURLCapture(browser: WebDriver): Promise<void> {
+  await browser.executeScript(`
+    if (window.__yiboshiOriginalOpen) {
+      window.open = window.__yiboshiOriginalOpen;
+      delete window.__yiboshiOriginalOpen;
+    }
+    delete window.__yiboshiCapturedPopupURL;
+  `);
 }
 
 async function logRedirectDebug(browser: WebDriver, clickTarget: WebElement, beforeWindowCount: number): Promise<void> {
@@ -201,9 +238,7 @@ function isClickFallbackError(clickError: unknown): boolean {
 async function waitDialogHidden(browser: WebDriver): Promise<void> {
   try {
     await browser.wait(async () => {
-      const overlays: WebElement[] = await browser.findElements(
-        By.css('.el-dialog__wrapper,.el-message-box__wrapper'),
-      );
+      const overlays: WebElement[] = await browser.findElements(By.css('.el-dialog__wrapper,.el-message-box__wrapper'));
 
       for (let i = 0; i < overlays.length; i++) {
         const display: string = await overlays[i]!.getCssValue('display');
