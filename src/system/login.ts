@@ -4,6 +4,26 @@ import Config from './config.ts';
 import { By, until, type WebDriver, WebElement } from 'selenium-webdriver';
 
 /**
+ * 关闭首页可能出现的公告/调查问卷弹窗。
+ * 弹窗是异步渲染的，若不先关闭会拦截登录区域的点击。
+ */
+async function closeBlockingPopup(browser: WebDriver): Promise<void> {
+  await browser.sleep(500);
+
+  const closeButtons = await browser.findElements(By.css('.reminderDisk_ybs_close'));
+  if (closeButtons.length === 0) {
+    return;
+  }
+
+  const closeButton = closeButtons[0]!;
+  if (await closeButton.isDisplayed()) {
+    console.log('【关闭首页弹窗】');
+    await closeButton.click();
+    await browser.sleep(200);
+  }
+}
+
+/**
  * 登录账号
  * @param user
  */
@@ -12,6 +32,8 @@ async function loginUser(user: User): Promise<void> {
   const browser: WebDriver = await createBrowserByURL(Config.YiboshiURL, { headless: false });
 
   try {
+    await closeBlockingPopup(browser);
+
     // 获取 new_login_box
     const newLoginBox: WebElement = await browser.wait(until.elementLocated(By.className('new_login_box')));
 
