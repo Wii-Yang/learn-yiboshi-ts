@@ -8,6 +8,8 @@ import { DailyStudyLimitError } from './video.ts';
 
 type CoursePageType = 'project' | 'other';
 
+export const DAILY_STUDY_LIMIT_WAIT_MS = 12 * 60 * 60 * 1000;
+
 async function getCoursePageType(browser: WebDriver): Promise<CoursePageType> {
   const coursePageType = await browser.wait(async (): Promise<CoursePageType | false> => {
     const projectContainers: WebElement[] = await browser.findElements(By.css('.nupm_right.f_r'));
@@ -45,7 +47,7 @@ async function startLearn(user: User) {
     });
     await closeDialog(browser);
 
-    const courseList: WebElement[] = await browser.findElements(By.css('.nupt_main a'));
+    let courseList: WebElement[] = await browser.findElements(By.css('.nupt_main a'));
 
     for (let i: number = 0; i < courseList.length; i++) {
       const course: WebElement = courseList[i]!;
@@ -69,10 +71,22 @@ async function startLearn(user: User) {
       } catch (courseError) {
         if (courseError instanceof DailyStudyLimitError) {
           console.error('==================== 自动学习强提醒 ====================');
-          console.error(`平台已停止今日学习：${courseError.message}`);
-          console.error('本次自动学习已结束，不再重试其他课程');
+          console.error(`平台已达到学习时长限制：${courseError.message}`);
+          console.error('等待 12 小时后继续当前课程');
           console.error('========================================================');
-          return;
+          await browser.sleep(DAILY_STUDY_LIMIT_WAIT_MS);
+          console.log('等待结束，重新加载课程列表并继续学习');
+          await browser.get(Config.YiboshiURL + usercenter);
+          await browser.wait(until.elementLocated(By.className('nupt_main')));
+          await browser.wait(async () => {
+            const nuptMain: WebElement = await browser.findElement(By.className('nupt_main'));
+            const links: WebElement[] = await nuptMain.findElements(By.css('a'));
+            return links.length > 0;
+          });
+          await closeDialog(browser);
+          courseList = await browser.findElements(By.css('.nupt_main a'));
+          i -= 1;
+          continue;
         }
         logSkipCourseGroupError(courseTitle, courseError);
         await browser.get(Config.YiboshiURL + usercenter);

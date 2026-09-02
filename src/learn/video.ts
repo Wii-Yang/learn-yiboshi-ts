@@ -1,6 +1,7 @@
 import { By, error, until, type WebDriver, type WebElement } from 'selenium-webdriver';
 import type User from '../user/index.ts';
 import { getRedirectURLByButton } from './utils.ts';
+import { closeDialogs } from './dialog-manager.ts';
 import { createBrowserByURL } from '../system/browser.ts';
 import { logLive } from '../system/logger.ts';
 
@@ -8,6 +9,7 @@ let lastActiveVideoName = '';
 let lastPlaybackLogTime = 0;
 let lastVideoCurrentTime = 0;
 let lastVideoCurrentTimeCheck = 0;
+let lastPlaybackVideoKey = '';
 let lastStallResumeTime = 0;
 let lastProgressChangeTime = 0;
 let lastProgressCompleted = 0;
@@ -27,6 +29,7 @@ interface PlaybackState {
   duration: number;
   paused: boolean;
   ended: boolean;
+  videoKey: string;
 }
 
 export class DailyStudyLimitError extends Error {
@@ -215,6 +218,7 @@ function resetPlaybackState(): void {
   lastPlaybackLogTime = 0;
   lastVideoCurrentTime = 0;
   lastVideoCurrentTimeCheck = Date.now();
+  lastPlaybackVideoKey = '';
   lastStallResumeTime = 0;
   lastProgressChangeTime = Date.now();
   lastProgressCompleted = 0;
@@ -274,6 +278,14 @@ async function logPlaybackHeartbeat(browser: WebDriver): Promise<void> {
   }
 
   const now = Date.now();
+  if (playbackState.videoKey !== lastPlaybackVideoKey) {
+    // A new video starts from a lower currentTime than the previous one.
+    // Reset the stall baseline before comparing playback positions.
+    lastPlaybackVideoKey = playbackState.videoKey;
+    lastVideoCurrentTime = playbackState.currentTime;
+    lastVideoCurrentTimeCheck = now;
+    lastStallResumeTime = 0;
+  }
   const isAdvancing = playbackState.currentTime > lastVideoCurrentTime + 1;
   if (isAdvancing) {
     lastVideoCurrentTime = playbackState.currentTime;
@@ -391,7 +403,8 @@ async function getPlaybackState(browser: WebDriver): Promise<PlaybackState | und
       currentTime: video.currentTime || 0,
       duration: Number.isFinite(video.duration) ? video.duration : 0,
       paused: video.paused,
-      ended: video.ended
+      ended: video.ended,
+      videoKey: video.currentSrc || video.src || String(video.duration)
     };
   `);
 }
@@ -606,11 +619,11 @@ async function forceResumeVideo(browser: WebDriver): Promise<boolean> {
 
 async function recoverVideo(browser: WebDriver, reason: string, refreshFirst = false): Promise<void> {
   logLive(`播放恢复：${reason}`);
-  await logVideoDiagnostics(browser, reason);
 
   if (!refreshFirst) {
     try {
       if (await forceResumeVideo(browser)) {
+        logLive('播放恢复成功：原生 video.play() 已恢复时间推进');
         return;
       }
     } catch (uiError) {
@@ -618,6 +631,7 @@ async function recoverVideo(browser: WebDriver, reason: string, refreshFirst = f
     }
   }
 
+  await logVideoDiagnostics(browser, reason);
   logLive('播放恢复：刷新播放页并重新点击播放器 UI');
   await browser.navigate().refresh();
   await waitVideoPageLoaded(browser);
@@ -662,57 +676,16 @@ async function logVideoDiagnostics(browser: WebDriver, reason: string): Promise<
 }
 
 async function closeDialog(browser: WebDriver): Promise<void> {
-  const messageBoxes: WebElement[] = await browser.findElements(By.className('el-message-box__wrapper'));
-  for (let i: number = 0; i < messageBoxes.length; i++) {
-    const messageBox: WebElement = messageBoxes[i]!;
-    const display: string = await messageBox.getCssValue('display');
-    if (display === 'none') {
-      continue;
-    }
-
-    const ariaLabel: string = await messageBox.getAttribute('aria-label');
-    const messageText: string = await messageBox.getText();
-    if (isDailyStudyLimitMessage(messageText)) {
-      throw new DailyStudyLimitError(normalizeDialogMessage(messageText));
-    }
-    if (ariaLabel === '温馨提示' || ariaLabel === '提示' || messageText.search('确认继续学习') >= 0) {
-      await clickConfirmButton(browser, messageBox);
-      continue;
-    }
-
-    console.error(`视频播放页出现未处理消息框：${ariaLabel || messageText}`);
-    throw 'exit';
-  }
-
-  const dialogs: WebElement[] = await browser.findElements(By.className('el-dialog__wrapper'));
-  for (let i = 0; i < dialogs.length; i++) {
-    const style: string = await dialogs[i]!.getAttribute('style');
-    if (style.search('display: none') >= 0) {
-      continue;
-    }
-
-    const dialog = await dialogs[i]!.findElement(By.className('el-dialog'));
-    const ariaLabel: string = await dialog.getAttribute('aria-label');
-    const dialogText: string = await dialog.getText();
-    if (isDailyStudyLimitMessage(dialogText)) {
-      throw new DailyStudyLimitError(normalizeDialogMessage(dialogText));
-    }
-    switch (ariaLabel) {
-      case '温馨提示':
-      case '提示': {
-        const buttons: WebElement[] = await dialog.findElements(By.css('button'));
-        if (buttons.length > 0) {
-          await safeClick(browser, buttons[0]!);
-        }
-        break;
-      }
-      default:
-        console.error('视频播放页出现未处理对话框');
-        throw 'exit';
-    }
-  }
-
-  await waitDialogHidden(browser);
+  await closeDialogs(browser, {
+    onVisibleMessageBox: (_label, text) => {
+      if (isDailyStudyLimitMessage(text)) throw new DailyStudyLimitError(normalizeDialogMessage(text));
+      return false;
+    },
+    onVisibleDialog: (_label, text) => {
+      if (isDailyStudyLimitMessage(text)) throw new DailyStudyLimitError(normalizeDialogMessage(text));
+      return false;
+    },
+  });
 }
 
 function isDailyStudyLimitMessage(message: string): boolean {
@@ -725,31 +698,6 @@ function normalizeDialogMessage(message: string): string {
     .replace(/^温馨提示\s*/, '')
     .replace(/\s*知道了$/, '')
     .trim();
-}
-
-async function clickConfirmButton(browser: WebDriver, container: WebElement): Promise<void> {
-  const buttons: WebElement[] = await container.findElements(By.css('button'));
-  const visibleButtons: WebElement[] = [];
-
-  for (let i = 0; i < buttons.length; i++) {
-    const button = buttons[i]!;
-    if (await button.isDisplayed()) {
-      visibleButtons.push(button);
-    }
-  }
-
-  for (let i = 0; i < visibleButtons.length; i++) {
-    const button = visibleButtons[i]!;
-    const buttonText: string = ((await button.getText()) || (await button.getAttribute('value')) || '').trim();
-    if (/^(是|确定|确认|继续学习)$/.test(buttonText)) {
-      await safeClick(browser, button);
-      return;
-    }
-  }
-
-  if (visibleButtons.length > 0) {
-    await safeClick(browser, visibleButtons[visibleButtons.length - 1]!);
-  }
 }
 
 async function safeClick(browser: WebDriver, element: WebElement): Promise<void> {
@@ -784,23 +732,4 @@ function isClickFallbackError(clickError: unknown): boolean {
     (clickError instanceof Error &&
       (clickError.name === 'ElementNotInteractableError' || clickError.name === 'ElementClickInterceptedError'))
   );
-}
-
-async function waitDialogHidden(browser: WebDriver): Promise<void> {
-  try {
-    await browser.wait(async () => {
-      const overlays: WebElement[] = await browser.findElements(By.css('.el-dialog__wrapper,.el-message-box__wrapper'));
-
-      for (let i = 0; i < overlays.length; i++) {
-        const display: string = await overlays[i]!.getCssValue('display');
-        if (display !== 'none') {
-          return false;
-        }
-      }
-
-      return true;
-    }, 1000 * 5);
-  } catch {
-    // Some pages keep hidden dialog nodes around during animation; the next loop will retry visible UI clicks.
-  }
 }
