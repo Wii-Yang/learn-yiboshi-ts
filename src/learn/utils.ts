@@ -1,4 +1,5 @@
 import { By, error, type WebDriver, type WebElement } from 'selenium-webdriver';
+import { closeDialogs } from './dialog-manager.ts';
 
 /**
  * 获取跳转后网址
@@ -147,70 +148,7 @@ async function logRedirectDebug(browser: WebDriver, clickTarget: WebElement, bef
  * @param browser
  */
 export async function closeDialog(browser: WebDriver): Promise<void> {
-  const message_box_list: WebElement[] = await browser.findElements(By.className('el-message-box__wrapper'));
-  for (let i = 0; i < message_box_list.length; i++) {
-    const message_box: WebElement = message_box_list[i]!;
-    const display: string = await message_box.getCssValue('display');
-    if (display === 'none') {
-      continue;
-    }
-
-    const aria_label: string = await message_box.getAttribute('aria-label');
-    if (aria_label === '提示' || aria_label === '温馨提示') {
-      const button_list: WebElement[] = await message_box.findElements(By.css('.el-message-box__btns button'));
-      const visibleButtons = await getVisibleElements(button_list);
-      if (visibleButtons.length > 0) {
-        await safeClick(browser, visibleButtons[0]!);
-      }
-      continue;
-    }
-
-    console.error(`程序运行中出现未处理的消息框：${aria_label}`);
-    throw 'exit';
-  }
-
-  const dialog_list: WebElement[] = await browser.findElements(By.className('el-dialog__wrapper'));
-
-  for (let i: number = 0; i < dialog_list.length; i++) {
-    const dialog: WebElement = dialog_list[i]!;
-    const display: string = await dialog.getCssValue('display');
-    if (display !== 'none') {
-      const el_dialog: WebElement = await dialog.findElement(By.className('el-dialog'));
-      const aria_label: string = await el_dialog.getAttribute('aria-label');
-      switch (aria_label) {
-        case '提示': {
-          // 勾选“记住选择，不再提示”复选框
-          const checkbox: WebElement = await el_dialog.findElement(
-            By.css('.el-dialog__body .dialog_content .dialog_content_message .el-checkbox'),
-          );
-          await safeClick(browser, checkbox);
-
-          // 点击“否”按钮
-          const button: WebElement = await el_dialog.findElement(
-            By.css('.el-dialog__footer .dialog-footer .el-button--default'),
-          );
-          await safeClick(browser, button);
-          break;
-        }
-        default:
-          console.error(`程序运行中出现未处理的对话框：${aria_label}`);
-          throw 'exit';
-      }
-    }
-  }
-
-  await waitDialogHidden(browser);
-}
-
-async function getVisibleElements(elements: WebElement[]): Promise<WebElement[]> {
-  const visibleElements: WebElement[] = [];
-  for (let i = 0; i < elements.length; i++) {
-    const element = elements[i]!;
-    if (await element.isDisplayed()) {
-      visibleElements.push(element);
-    }
-  }
-  return visibleElements;
+  await closeDialogs(browser);
 }
 
 async function safeClick(browser: WebDriver, element: WebElement): Promise<void> {
@@ -233,23 +171,4 @@ function isClickFallbackError(clickError: unknown): boolean {
     (clickError instanceof Error &&
       (clickError.name === 'ElementNotInteractableError' || clickError.name === 'ElementClickInterceptedError'))
   );
-}
-
-async function waitDialogHidden(browser: WebDriver): Promise<void> {
-  try {
-    await browser.wait(async () => {
-      const overlays: WebElement[] = await browser.findElements(By.css('.el-dialog__wrapper,.el-message-box__wrapper'));
-
-      for (let i = 0; i < overlays.length; i++) {
-        const display: string = await overlays[i]!.getCssValue('display');
-        if (display !== 'none') {
-          return false;
-        }
-      }
-
-      return true;
-    }, 1000 * 5);
-  } catch {
-    // Some pages keep hidden dialog nodes around during animation; the next click will still use visible UI controls.
-  }
 }
