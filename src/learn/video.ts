@@ -2,7 +2,7 @@ import { By, error, until, type WebDriver, type WebElement } from 'selenium-webd
 import type User from '../user/index.ts';
 import { getRedirectURLByButton } from './utils.ts';
 import { closeDialogs } from './dialog-manager.ts';
-import { createBrowserByURL } from '../system/browser.ts';
+import { createBrowserByURL, quitBrowser } from '../system/browser.ts';
 import { logLive } from '../system/logger.ts';
 
 let lastActiveVideoName = '';
@@ -14,6 +14,7 @@ let lastStallResumeTime = 0;
 let lastProgressChangeTime = 0;
 let lastProgressCompleted = 0;
 let lastProgressRecoveryTime = 0;
+let progressVerifyRounds = 0;
 
 // 达标进度采样点，用于估算剩余时间
 const progressSamples: Array<{ time: number; value: number }> = [];
@@ -23,6 +24,9 @@ const VIDEO_PAGE_LOAD_TIMEOUT_MS = 1000 * 60 * 2;
 const STALL_DETECT_THRESHOLD_MS = 1000 * 60;
 // 两次播放恢复之间的最小间隔，避免同一段视频被频繁刷新
 const STALL_RESUME_COOLDOWN_MS = 1000 * 30;
+const MAX_UNEXPECTED_PAGE_RECOVERIES = 2;
+// 客户端进度到 100% 后校验服务端进度的轮次与等待时长：末段上报有延迟，逐轮加大等待
+const PROGRESS_VERIFY_SETTLES_MS = [8000, 40000, 60000];
 
 interface PlaybackState {
   currentTime: number;
@@ -68,6 +72,7 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
   let lastPlayError: unknown;
   for (let attempt = 1; attempt <= 2; attempt++) {
     const browser: WebDriver = await createBrowserByURL(url, { headless: true, muteAudio: true }, user);
+    let unexpectedPageRecoveryCount = 0;
 
     try {
       console.log('等待视频加载中......');
@@ -79,6 +84,27 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
 
       await browser.wait(async () => {
         try {
+          if (!(await isVideoPage(browser))) {
+            if (await isAuthenticationPage(browser)) {
+              await logVideoDiagnostics(browser, '播放过程中登录态失效');
+              throw new Error('播放过程中登录态失效，请重新登录后继续学习');
+            }
+
+            if (unexpectedPageRecoveryCount >= MAX_UNEXPECTED_PAGE_RECOVERIES) {
+              await logVideoDiagnostics(browser, '播放页多次意外跳转');
+              throw new Error('播放页多次意外跳转，停止本次播放');
+            }
+
+            unexpectedPageRecoveryCount += 1;
+            logLive(`播放页意外关闭，正在重新打开（第 ${unexpectedPageRecoveryCount} 次）`);
+            await browser.get(url);
+            await waitVideoPageLoaded(browser);
+            await muteVideo(browser);
+            await waitInitialPlayback(browser);
+            resetPlaybackState();
+            return false;
+          }
+
           await closeDialog(browser);
           await browser.sleep(1000);
 
@@ -98,7 +124,11 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
 
           await logActiveVideo(browser);
           await logPlaybackHeartbeat(browser);
-          return await isCompleted(browser);
+          const clientCompleted = await isCompleted(browser);
+          if (!clientCompleted) {
+            return false;
+          }
+          return await verifyProgressOnServer(browser);
         } catch (waitError) {
           if (isStaleElementError(waitError)) {
             return false;
@@ -119,12 +149,42 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
         logLive('播放恢复：重启隐藏浏览器后重试视频播放');
       }
     } finally {
-      await browser.quit();
+      await quitBrowser(browser);
     }
   }
 
   console.error('视频播放重试后仍失败', lastPlayError);
   throw 'play video';
+}
+
+async function isVideoPage(browser: WebDriver): Promise<boolean> {
+  const videoMain: WebElement[] = await browser.findElements(By.css('.video_main'));
+  return videoMain.length > 0;
+}
+
+async function isAuthenticationPage(browser: WebDriver): Promise<boolean> {
+  const currentUrl = (await browser.getCurrentUrl()).toLowerCase();
+  if (/\/(login|signin)(?:[/?#]|$)/.test(currentUrl)) {
+    return true;
+  }
+
+  const loginSelectors = ['.new_login_box', '.login_box', '.nlb_main'];
+  for (const selector of loginSelectors) {
+    const elements = await browser.findElements(By.css(selector));
+    for (const element of elements) {
+      try {
+        if (await element.isDisplayed()) {
+          return true;
+        }
+      } catch (visibilityError) {
+        if (!isStaleElementError(visibilityError)) {
+          throw visibilityError;
+        }
+      }
+    }
+  }
+
+  return false;
 }
 
 async function getVideoURLFromProjectPage(button: WebElement, courseName: string): Promise<string> {
@@ -223,32 +283,85 @@ function resetPlaybackState(): void {
   lastProgressChangeTime = Date.now();
   lastProgressCompleted = 0;
   lastProgressRecoveryTime = 0;
+  progressVerifyRounds = 0;
 }
 
 async function isCompleted(browser: WebDriver): Promise<boolean> {
-  const videoDabiao: WebElement = await browser.findElement(By.css('.video_main .vm .vm_star .video_dabiao'));
-  const videoDabiaoText: string = await videoDabiao.getText();
-  const value: string[] | null = videoDabiaoText.match(/[0-9]{1,3}/g) as string[] | null;
-  if (value && value.length === 2) {
-    const progressList: number[] = value.map((item: string) => Number(item));
-    const completedProgress = progressList[1]!;
-    if (completedProgress !== lastProgressCompleted) {
-      lastProgressCompleted = completedProgress;
-      lastProgressChangeTime = Date.now();
-      progressSamples.push({ time: lastProgressChangeTime, value: completedProgress });
-      if (progressSamples.length > 12) {
-        progressSamples.shift();
-      }
-    }
+  const progress = await readProgressRequirement(browser);
+  if (!progress) {
+    return false;
+  }
 
-    if (progressList[0]! <= progressList[1]!) {
-      if (await playNextVideoIfExists(browser)) {
-        return false;
-      }
-      await browser.sleep(2000);
-      return true;
+  if (progress.completed !== lastProgressCompleted) {
+    lastProgressCompleted = progress.completed;
+    lastProgressChangeTime = Date.now();
+    progressSamples.push({ time: lastProgressChangeTime, value: progress.completed });
+    if (progressSamples.length > 12) {
+      progressSamples.shift();
     }
   }
+
+  if (progress.required <= progress.completed) {
+    if (await playNextVideoIfExists(browser)) {
+      return false;
+    }
+    await browser.sleep(2000);
+    return true;
+  }
+  return false;
+}
+
+async function readProgressRequirement(
+  browser: WebDriver,
+): Promise<{ required: number; completed: number } | null> {
+  try {
+    const videoDabiao: WebElement = await browser.findElement(By.css('.video_main .vm .vm_star .video_dabiao'));
+    const videoDabiaoText: string = await videoDabiao.getText();
+    const value: string[] | null = videoDabiaoText.match(/[0-9]{1,3}/g) as string[] | null;
+    if (value && value.length === 2) {
+      return { required: Number(value[0]), completed: Number(value[1]) };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * 客户端进度到 100% 后，刷新页面读取服务端学习进度确认已落库。
+ * 未达标则留在播放页继续补播，等待下一段末尾上报后再次校验。
+ * @param browser
+ */
+async function verifyProgressOnServer(browser: WebDriver): Promise<boolean> {
+  if (progressVerifyRounds >= PROGRESS_VERIFY_SETTLES_MS.length) {
+    console.error(
+      `服务端学习进度连续 ${progressVerifyRounds} 轮校验未达标，按客户端进度继续后续流程（考试入口被弹回时由重试兜底）`,
+    );
+    return true;
+  }
+
+  const settleMs = PROGRESS_VERIFY_SETTLES_MS[progressVerifyRounds]!;
+  progressVerifyRounds += 1;
+  logLive(
+    `客户端进度已达100%，等待 ${Math.round(settleMs / 1000)} 秒后校验服务端学习进度（第 ${progressVerifyRounds} 轮）`,
+  );
+  await browser.sleep(settleMs);
+
+  await browser.navigate().refresh();
+  await waitVideoPageLoaded(browser);
+  await closeDialog(browser);
+
+  const progress = await readProgressRequirement(browser);
+  if (progress && progress.required <= progress.completed) {
+    logLive(`服务端学习进度校验通过：${progress.completed}/${progress.required}`);
+    return true;
+  }
+
+  const progressText = progress ? `${progress.completed}/${progress.required}` : '未知';
+  logLive(`服务端学习进度未达标（${progressText}），继续播放补齐进度`);
+  resetPlaybackState();
+  await muteVideo(browser);
+  await waitInitialPlayback(browser);
   return false;
 }
 
@@ -410,17 +523,8 @@ async function getPlaybackState(browser: WebDriver): Promise<PlaybackState | und
 }
 
 async function getCompletedProgress(browser: WebDriver): Promise<number | null> {
-  try {
-    const progressElement = await browser.findElement(By.css('.video_main .vm .vm_star .video_dabiao'));
-    const progressText = await progressElement.getText();
-    const value = progressText.match(/[0-9]{1,3}/g) as string[] | null;
-    if (value && value.length === 2) {
-      return Number(value[1]);
-    }
-  } catch {
-    return null;
-  }
-  return null;
+  const progress = await readProgressRequirement(browser);
+  return progress ? progress.completed : null;
 }
 
 function buildProgressBar(progress: number, width = 12): string {
