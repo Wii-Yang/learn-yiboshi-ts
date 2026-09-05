@@ -4,10 +4,21 @@ import { getRedirectURLByButton } from './utils.ts';
 import { createBrowserByURL } from '../system/browser.ts';
 
 const TEST_LOAD_TIMEOUT = 30 * 1000;
-const RESULT_DIALOG_TIMEOUT = 20 * 1000;
+// 交卷接口偶发需要较长时间，避免在请求仍 pending 时提前关闭浏览器。
+const RESULT_DIALOG_TIMEOUT = 60 * 1000;
 const CLICK_SETTLE_TIME = 500;
 
 type QuestionType = '单选题' | '多选题' | '是非题';
+
+/**
+ * 考试入口被平台弹回视频播放页（服务端学习进度未达标）时抛出
+ */
+export class ExamBlockedByVideoError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ExamBlockedByVideoError';
+  }
+}
 
 interface QuestionGroups {
   choice: WebElement[];
@@ -30,6 +41,11 @@ export async function examination(button: WebElement, courseName: string, user: 
 
   console.log('获取考试页网址中......');
   const url: string = await getRedirectURLByButton(button);
+
+  if (new URL(url).pathname === '/videoPlayer') {
+    // 平台在服务端学习进度未达标时会把考试入口弹回视频播放页，直接开考只会超时
+    throw new ExamBlockedByVideoError(`考试入口被弹回视频播放页（服务端学习进度未达标）：${url}`);
+  }
 
   console.log(`开始【${courseName}】课程考试`);
   await openExamination(url, user, courseName);
@@ -72,11 +88,7 @@ async function openExamination(url: string, user: User, courseName: string): Pro
 
 async function getQuestionGroups(browser: WebDriver): Promise<QuestionGroups> {
   const testTypeList: WebElement[] = await browser.findElements(By.className('test_type'));
-  const questionGroups: QuestionGroups = {
-    choice: [],
-    multipleChoice: [],
-    judging: [],
-  };
+  const questionGroups: QuestionGroups = { choice: [], multipleChoice: [], judging: [] };
 
   for (let i = 0; i < testTypeList.length; i++) {
     const ttTitle: WebElement = await testTypeList[i]!.findElement(By.className('tt_title'));
@@ -141,12 +153,22 @@ async function findSubmitButton(browser: WebDriver): Promise<WebElement> {
 async function waitResultDialog(browser: WebDriver): Promise<WebElement> {
   try {
     const resultDialog = await browser.wait(async () => {
+      const messages: WebElement[] = await browser.findElements(By.css('.el-message'));
+      for (const message of messages) {
+        if (!(await isVisible(message))) continue;
+        const className = (await message.getAttribute('class')) || '';
+        const text = (await message.getText()).trim();
+        if (text && /el-message--(error|warning)/.test(className)) {
+          throw new Error(`交卷接口返回错误：${text}`);
+        }
+      }
+
       const dialogWrappers: WebElement[] = await browser.findElements(By.className('el-dialog__wrapper'));
       for (let i = 0; i < dialogWrappers.length; i++) {
         if (!(await isVisible(dialogWrappers[i]!))) continue;
 
         const dialog: WebElement = await dialogWrappers[i]!.findElement(By.className('el-dialog'));
-        const ariaLabel: string = await dialog.getAttribute('aria-label');
+        const ariaLabel: string = (await dialog.getAttribute('aria-label')) || '';
         const text: string = await dialog.getText();
         if (ariaLabel.includes('答题成绩') || text.includes('答题成绩')) {
           return dialogWrappers[i]!;
@@ -176,7 +198,9 @@ async function closeResultsDialog(browser: WebDriver): Promise<void> {
     return;
   }
 
-  const confirmButtons: WebElement[] = await browser.findElements(By.css('.el-dialog__footer button,.el-message-box__btns button'));
+  const confirmButtons: WebElement[] = await browser.findElements(
+    By.css('.el-dialog__footer button,.el-message-box__btns button'),
+  );
   for (let i = confirmButtons.length - 1; i >= 0; i--) {
     if (!(await isVisible(confirmButtons[i]!))) continue;
     await clickElement(browser, confirmButtons[i]!);
@@ -199,7 +223,11 @@ async function answerChoiceQuestions(questions: WebElement[]): Promise<void> {
   }
 }
 
-async function answerSingleAnswerQuestion(type: '单选题' | '是非题', index: number, question: WebElement): Promise<void> {
+async function answerSingleAnswerQuestion(
+  type: '单选题' | '是非题',
+  index: number,
+  question: WebElement,
+): Promise<void> {
   const browser: WebDriver = question.getDriver();
   const items = await getAnswerItems(question);
 
@@ -338,6 +366,14 @@ async function logExamDiagnostics(browser: WebDriver, reason: string): Promise<v
           text: visibleText(dialog)
         }))
         .filter((dialog) => dialog.display !== 'none');
+      const messages = [...document.querySelectorAll('.el-message')]
+        .map((message) => ({
+          display: getComputedStyle(message).display,
+          className: message.className,
+          text: visibleText(message)
+        }))
+        .filter((message) => message.display !== 'none');
+      const submit = document.querySelector('.sjm_submit a');
       const testTypes = [...document.querySelectorAll('.test_type')].map((type) => ({
         title: visibleText(type.querySelector('.tt_title')),
         questionCount: type.querySelectorAll('.ttm_cell').length
@@ -346,6 +382,14 @@ async function logExamDiagnostics(browser: WebDriver, reason: string): Promise<v
         title: document.title,
         url: location.href,
         dialogs,
+        messages,
+        submit: submit ? {
+          text: visibleText(submit),
+          href: submit.getAttribute('href'),
+          className: submit.getAttribute('class'),
+          style: submit.getAttribute('style')
+        } : null,
+        answeredCount: document.querySelectorAll('.ttm_cell .is-checked, .ttm_cell input:checked').length,
         testTypes,
         submitText: visibleText(document.querySelector('.sjm_submit')),
         bodyText: visibleText(document.body)
