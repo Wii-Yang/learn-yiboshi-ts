@@ -5,7 +5,7 @@ export interface DialogHandlerOptions {
   onVisibleMessageBox?: (label: string, text: string) => Promise<boolean> | boolean;
 }
 
-const CONFIRM_WORDS = /同意|确认|确定|知道了|继续|已阅读|关闭/;
+const CONFIRM_WORDS = /同意|确认|确定|知道了|否|已阅读|关闭/;
 const SAFE_LABELS = /^(提示|温馨提示)$/;
 const NOTICE_WORDS = /知情通知|用户协议|隐私政策/;
 
@@ -30,7 +30,7 @@ export async function closeDialogs(browser: WebDriver, options: DialogHandlerOpt
     const text = await dialog.getText();
     if (await options.onVisibleDialog?.(label, text)) continue;
     if (SAFE_LABELS.test(label) || NOTICE_WORDS.test(`${label} ${text}`)) {
-      await checkFirstUnchecked(browser, dialog);
+      // await checkFirstUnchecked(browser, dialog);
       await clickBestButton(browser, dialog);
       continue;
     }
