@@ -107,6 +107,8 @@ export async function playVideo(button: WebElement, courseName: string, user: Us
         }
       });
 
+      // 视频完成后等待2秒更新进度
+      await browser.sleep(2000);
       console.log(`完成【${courseName}】课程视频`);
       return;
     } catch (playError) {
