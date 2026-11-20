@@ -1,7 +1,7 @@
 import { By, until, type WebDriver, type WebElement } from 'selenium-webdriver';
 import { learnProject } from './project.ts';
 import type User from '../user/index.ts';
-import { examination } from './examination.ts';
+import { ExamBlockedByVideoError, examination } from './examination.ts';
 import { playVideo } from './video.ts';
 import { closeDialog } from './utils.ts';
 
@@ -219,7 +219,15 @@ export async function learnOtherCourse(browser: WebDriver, user: User): Promise<
             console.log(`开始【${course_name}】课程学习`);
 
             // 考试
-            await examination(td[7]!, course_name, user);
+            try {
+              await examination(td[7]!, course_name, user);
+            } catch (examError) {
+              if (!(examError instanceof ExamBlockedByVideoError)) {
+                throw examError;
+              }
+              // 服务端学习进度未达标被弹回视频页，先完成视频学习，考试留待视频达标后重考
+              console.error(`课程【${course_name}】${examError.message}，跳过考试先播放视频`);
+            }
 
             try {
               // 播放视频

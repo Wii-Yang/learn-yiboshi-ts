@@ -1,11 +1,14 @@
 import { By, until, type WebDriver, type WebElement } from 'selenium-webdriver';
 import type User from '../user/index.ts';
 import { createBrowserByURL } from '../system/browser.ts';
-import { examination } from './examination.ts';
+import { ExamBlockedByVideoError, examination } from './examination.ts';
 import { DailyStudyLimitError, playVideo } from './video.ts';
 import { closeDialog, getRedirectURLByButton } from './utils.ts';
 
 const PROJECT_COURSE_LOAD_TIMEOUT_MS = 1000 * 45;
+// 服务端学习进度同步存在延迟，考试入口被弹回视频页后等待一段时间再重试
+const EXAM_RETRY_DELAY_MS = 1000 * 20;
+const MAX_EXAM_ATTEMPTS = 3;
 
 export async function learnProject(project: WebElement, user: User) {
   const npcb_txt: WebElement = await project.findElement(By.css('.npcb_txt a'));
@@ -43,11 +46,36 @@ async function openProject(url: string, user: User): Promise<void> {
           try {
             await playVideo(td[4]!, courseName, user);
 
-            await refreshProjectPage(browser);
-            const latestCourseRow = await findCourseRowByName(browser, courseName);
-            const latestTd: WebElement[] = await latestCourseRow.findElements(By.css('td'));
-
-            await examination(latestTd[5]!, courseName, user);
+            let lastExamError: unknown;
+            let examPassed = false;
+            for (let examAttempt = 1; examAttempt <= MAX_EXAM_ATTEMPTS && !examPassed; examAttempt++) {
+              try {
+                await refreshProjectPage(browser);
+                const examCourseRow = await findCourseRowByName(browser, courseName);
+                const examTd: WebElement[] = await examCourseRow.findElements(By.css('td'));
+                await examination(examTd[5]!, courseName, user);
+                examPassed = true;
+              } catch (retryExamError) {
+                if (retryExamError instanceof DailyStudyLimitError) {
+                  throw retryExamError;
+                }
+                lastExamError = retryExamError;
+                if (
+                  !(retryExamError instanceof ExamBlockedByVideoError) ||
+                  examAttempt >= MAX_EXAM_ATTEMPTS
+                ) {
+                  throw retryExamError;
+                }
+                console.error(
+                  `考试入口第 ${examAttempt} 次被弹回视频页，${EXAM_RETRY_DELAY_MS / 1000} 秒后重试` +
+                    `（${examAttempt}/${MAX_EXAM_ATTEMPTS}）`,
+                );
+                await browser.sleep(EXAM_RETRY_DELAY_MS);
+              }
+            }
+            if (!examPassed && lastExamError) {
+              throw lastExamError;
+            }
 
             console.log(`完成【${courseName}】课程学习\n`);
           } catch (courseError) {
