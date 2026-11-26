@@ -1,5 +1,6 @@
-import { ServiceBuilder, Options } from 'selenium-webdriver/chrome.js';
-import { Builder, WebDriver } from 'selenium-webdriver';
+import { Driver, ServiceBuilder, Options } from 'selenium-webdriver/chrome.js';
+import type { WebDriver } from 'selenium-webdriver';
+import type { DriverService } from 'selenium-webdriver/remote.js';
 
 import Config from './config.ts';
 import type User from '../user/index.ts';
@@ -9,15 +10,18 @@ interface BrowserOptions {
   muteAudio?: boolean;
 }
 
+const browserServices = new WeakMap<WebDriver, DriverService>();
+const BROWSER_QUIT_TIMEOUT_MS = 1000 * 15;
+
 /**
  * 创建浏览器
  * @param options
  */
 export async function createBrowser(options: BrowserOptions = { headless: true }): Promise<WebDriver> {
   // 获取 chromedriver
-  const service: ServiceBuilder = new ServiceBuilder(Config.ChromedriverPath);
+  const serviceBuilder: ServiceBuilder = new ServiceBuilder(Config.ChromedriverPath);
   // 屏蔽 chromedriver 进程的输出，避免把 Chrome 后台日志(如 GCM)刷进终端
-  service.setStdio('ignore');
+  serviceBuilder.setStdio('ignore');
 
   // 浏览器配置
   const chromeOptions: Options = new Options();
@@ -38,18 +42,34 @@ export async function createBrowser(options: BrowserOptions = { headless: true }
     chromeOptions.addArguments('--mute-audio');
   }
 
-  const builder: Builder = new Builder();
-  builder.forBrowser('chrome');
-  builder.setChromeService(service);
-  builder.setChromeOptions(chromeOptions);
-
-  // 创建浏览器实例
-  const driver: WebDriver = builder.build();
+  const service = serviceBuilder.build();
+  const driver: WebDriver = Driver.createSession(chromeOptions, service);
+  browserServices.set(driver, service);
 
   // 浏览器窗口最大化
   await driver.manage().window().maximize();
 
   return driver;
+}
+
+export async function quitBrowser(browser: WebDriver): Promise<void> {
+  const service = browserServices.get(browser);
+  let timeout: NodeJS.Timeout | undefined;
+
+  try {
+    await Promise.race([
+      browser.quit(),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error('浏览器关闭超时')), BROWSER_QUIT_TIMEOUT_MS);
+      }),
+    ]);
+  } catch (quitError) {
+    console.error('浏览器未正常关闭，正在清理残留进程', quitError);
+    await service?.kill();
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    browserServices.delete(browser);
+  }
 }
 
 export async function createBrowserByURL(url: string, options?: BrowserOptions, user?: User): Promise<WebDriver> {

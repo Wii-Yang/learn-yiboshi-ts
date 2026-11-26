@@ -25,6 +25,7 @@ export async function getRedirectURLByButton(button: WebElement): Promise<string
   await safeClick(browser, clickTarget);
 
   try {
+    let lastDialogSweepTime = 0;
     await browser.wait(async (): Promise<boolean> => {
       const newHandles = await browser.getAllWindowHandles();
       if (newHandles.length > beforeAllWindowHandles.length) {
@@ -33,7 +34,17 @@ export async function getRedirectURLByButton(button: WebElement): Promise<string
 
       const currentURL: string = await browser.getCurrentUrl();
       const capturedPopupURL = await getCapturedPopupURL(browser);
-      return currentURL !== beforeURL || !!capturedPopupURL;
+      if (currentURL !== beforeURL || !!capturedPopupURL) {
+        return true;
+      }
+
+      // 入口点击后才弹出的弹窗（如“继续上次观看课程”）会拦截跳转，等待期间周期性关闭
+      const now = Date.now();
+      if (now - lastDialogSweepTime > 2000) {
+        lastDialogSweepTime = now;
+        await sweepBlockingDialogs(browser);
+      }
+      return false;
     }, 1000 * 20);
   } catch (error) {
     await restorePopupURLCapture(browser);
@@ -79,6 +90,14 @@ export async function getRedirectURLByButton(button: WebElement): Promise<string
   await browser.switchTo().window(currentWindowHandle);
 
   return redirectURL;
+}
+
+async function sweepBlockingDialogs(browser: WebDriver): Promise<void> {
+  try {
+    await closeDialog(browser);
+  } catch {
+    // 等待跳转期间出现的未知弹窗交由后续流程处理，不中断跳转等待
+  }
 }
 
 async function installPopupURLCapture(browser: WebDriver): Promise<void> {
